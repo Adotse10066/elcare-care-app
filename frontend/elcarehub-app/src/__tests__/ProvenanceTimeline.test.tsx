@@ -1,5 +1,5 @@
 /**
- * Tests for ProvenanceTimeline (Issue #99).
+ * Tests for ProvenanceTimeline (Issue #99, Issue #908).
  *
  * Covers:
  * - Loading state
@@ -10,6 +10,7 @@
  * - Transaction explorer links (present for real hashes, absent for ledger_ ids)
  * - Chronological ordering
  * - Load more / pagination
+ * - Accessibility: event label availability and decorative icon semantics (Issue #908)
  */
 
 import React from "react";
@@ -268,6 +269,142 @@ describe("ProvenanceTimeline", () => {
       const btn = screen.getByTestId("load-more-button");
       expect(btn).toBeDisabled();
       expect(btn).toHaveTextContent(/loading/i);
+    });
+  });
+
+  // ── Issue #908 — accessibility: text alternatives & decorative icon semantics ──
+
+  describe("accessibility (Issue #908)", () => {
+    it("every timeline event has a readable text label visible in the DOM", () => {
+      const events: ActivityEvent[] = [
+        makeEvent({ id: "e1", type: "LISTED" }),
+        makeEvent({ id: "e2", type: "OFFER_SUBMITTED" }),
+        makeEvent({ id: "e3", type: "PURCHASE" }),
+        makeEvent({ id: "e4", type: "TRANSFER" }),
+        makeEvent({ id: "e5", type: "CANCELLED" }),
+      ];
+      render(<ProvenanceTimeline {...defaultProps} events={events} />);
+
+      expect(screen.getByText("Created listing")).toBeInTheDocument();
+      expect(screen.getByText("Submitted an offer")).toBeInTheDocument();
+      expect(screen.getByText("Purchased listing")).toBeInTheDocument();
+      expect(screen.getByText("Transferred ownership")).toBeInTheDocument();
+      expect(screen.getByText("Listing cancelled")).toBeInTheDocument();
+    });
+
+    it("the event icon bubble is hidden from assistive technology", () => {
+      render(
+        <ProvenanceTimeline
+          {...defaultProps}
+          events={[makeEvent({ id: "e1", type: "LISTED" })]}
+        />
+      );
+      // The icon bubble wrapper carries aria-hidden="true" so the SVG icon
+      // inside is not announced — confirm the bubble is not reachable by role.
+      const listitem = screen.getByTestId("timeline-event-LISTED");
+      // aria-hidden elements must not appear in the accessibility tree.
+      // We verify by querying all aria-hidden children of the list item.
+      const hiddenBubble = listitem.querySelector('[aria-hidden="true"]');
+      expect(hiddenBubble).not.toBeNull();
+    });
+
+    it("icon bubble does not expose an accessible name that duplicates the event label", () => {
+      render(
+        <ProvenanceTimeline
+          {...defaultProps}
+          events={[makeEvent({ id: "e1", type: "MINT" as any })]}
+        />
+      );
+      const listitem = screen.getByTestId("timeline-event-MINT");
+      // Confirm the event label text is present once as visible text
+      expect(screen.getByText("Minted artwork")).toBeInTheDocument();
+      // The icon bubble is aria-hidden — it must not carry an aria-label
+      // that would re-announce the action.
+      const bubble = listitem.querySelector('[aria-hidden="true"]');
+      expect(bubble).not.toHaveAttribute("aria-label");
+    });
+
+    it("ConfirmationBadge 'Confirmed' label is readable and its icon is aria-hidden", () => {
+      const event = { ...makeEvent(), confirmed: true } as any;
+      render(
+        <ProvenanceTimeline {...defaultProps} events={[event]} />
+      );
+      const badge = screen.getByTestId("badge-confirmed");
+      // Visible text label is present
+      expect(badge).toHaveTextContent("Confirmed");
+      // The SVG icon inside the badge is aria-hidden
+      const icon = badge.querySelector("svg");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("ConfirmationBadge 'Pending' label is readable and its icon is aria-hidden", () => {
+      const event = { ...makeEvent(), confirmed: false } as any;
+      render(
+        <ProvenanceTimeline {...defaultProps} events={[event]} />
+      );
+      const badge = screen.getByTestId("badge-pending");
+      expect(badge).toHaveTextContent("Pending");
+      const icon = badge.querySelector("svg");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("TxLink external icon is aria-hidden so the link text is not duplicated", () => {
+      render(
+        <ProvenanceTimeline
+          {...defaultProps}
+          events={[makeEvent({ tx_hash: "realhash123" })]}
+        />
+      );
+      const txLink = screen.getByTestId("tx-link");
+      const icon = txLink.querySelector("svg");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("empty-state decorative icon is aria-hidden", () => {
+      render(<ProvenanceTimeline {...defaultProps} events={[]} />);
+      const emptyContainer = screen.getByTestId("timeline-empty");
+      const icon = emptyContainer.querySelector("svg");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+      // The descriptive text label is still present
+      expect(screen.getByText(/no activity recorded yet/i)).toBeInTheDocument();
+    });
+
+    it("reorg banner icons are aria-hidden while the alert text is readable", () => {
+      render(
+        <ProvenanceTimeline
+          {...defaultProps}
+          events={[makeEvent()]}
+          reorgDetected
+          onRefresh={jest.fn()}
+        />
+      );
+      const banner = screen.getByTestId("reorg-banner");
+      // Both decorative SVGs inside the banner are aria-hidden
+      const icons = banner.querySelectorAll("svg[aria-hidden='true']");
+      expect(icons.length).toBeGreaterThanOrEqual(2);
+      // The human-readable alert text is present
+      expect(
+        screen.getByText(/chain reorganization detected/i)
+      ).toBeInTheDocument();
+    });
+
+    it("event ordering and content are unchanged after accessibility fix", () => {
+      const events: ActivityEvent[] = [
+        makeEvent({ id: "e1", type: "LISTED", timestamp: 1_000_000 }),
+        makeEvent({ id: "e2", type: "OFFER_SUBMITTED", timestamp: 2_000_000 }),
+        makeEvent({ id: "e3", type: "PURCHASE", timestamp: 3_000_000 }),
+      ];
+      render(<ProvenanceTimeline {...defaultProps} events={events} />);
+
+      const items = screen.getAllByRole("listitem");
+      expect(items[0]).toHaveAttribute("data-testid", "timeline-event-LISTED");
+      expect(items[1]).toHaveAttribute("data-testid", "timeline-event-OFFER_SUBMITTED");
+      expect(items[2]).toHaveAttribute("data-testid", "timeline-event-PURCHASE");
+
+      // Labels are all still present
+      expect(screen.getByText("Created listing")).toBeInTheDocument();
+      expect(screen.getByText("Submitted an offer")).toBeInTheDocument();
+      expect(screen.getByText("Purchased listing")).toBeInTheDocument();
     });
   });
 });
