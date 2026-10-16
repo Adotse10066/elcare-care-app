@@ -13,6 +13,8 @@ interface Toast {
 
 interface ToastContextValue {
   pushToast: (message: string, type?: ToastType, durationMs?: number) => void;
+  /** Remove a specific notification by id. Does not affect transaction state. */
+  dismissToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -32,6 +34,9 @@ function toastClasses(type: ToastType): string {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // removeToast is the single removal primitive used by both the auto-timeout
+  // and the manual dismiss control. Defined once so neither caller holds a
+  // stale reference.
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
@@ -45,19 +50,36 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [removeToast]
   );
 
-  const value = useMemo<ToastContextValue>(() => ({ pushToast }), [pushToast]);
+  // dismissToast is exposed on the context so callers (and tests) can remove
+  // a notification imperatively. Dismissing feedback never touches transaction
+  // state — it only filters the local toasts array.
+  const dismissToast = useCallback((id: string) => removeToast(id), [removeToast]);
+
+  const value = useMemo<ToastContextValue>(
+    () => ({ pushToast, dismissToast }),
+    [pushToast, dismissToast]
+  );
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-20 z-[100] flex w-full max-w-sm flex-col gap-2">
+      {/*
+        The outer container is pointer-events-none so it doesn't block page
+        content below it.  Each individual toast re-enables pointer events for
+        itself so the dismiss button and any links inside remain clickable.
+      */}
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        className="pointer-events-none fixed right-4 top-20 z-[100] flex w-full max-w-sm flex-col gap-2"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 shadow-lg ${toastClasses(toast.type)}`}
             role={toast.type === "error" ? "alert" : "status"}
           >
-            <span className="mt-0.5">{iconForType(toast.type)}</span>
+            <span className="mt-0.5" aria-hidden="true">{iconForType(toast.type)}</span>
             <p className="flex-1 text-sm">{toast.message}</p>
             <button
               type="button"
@@ -65,7 +87,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               onClick={() => removeToast(toast.id)}
               className="text-current/70 hover:text-current"
             >
-              <X size={14} />
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         ))}
