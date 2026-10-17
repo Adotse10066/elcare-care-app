@@ -3,7 +3,7 @@
  * and the individual check functions.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
@@ -326,5 +326,95 @@ describe('GET /health/details — admin token auth', () => {
     expect(res.status).toBe(200);
     expect(res.body.checks).toBeDefined();
     expect(res.body.details).toBeDefined();
+  });
+});
+
+// ── Secret redaction regression test ─────────────────────────────────────────
+
+describe('Secret redaction regression — GET /health must not leak env secrets', () => {
+  let app: express.Application;
+  let savedEnv: Record<string, string | undefined>;
+
+  const SENTINEL_KEYS = ['DATABASE_URL', 'REDIS_URL', 'STELLAR_RPC_URL'] as const;
+  const SENTINEL_VALUES: Record<string, string> = {
+    DATABASE_URL: 'postgresql://user:SECRET123@localhost/db',
+    REDIS_URL: 'redis://:SECRET456@localhost:6379',
+    STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org/SECRET789',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Save current env values so we can restore them after each test
+    savedEnv = {};
+    for (const key of SENTINEL_KEYS) {
+      savedEnv[key] = process.env[key];
+      process.env[key] = SENTINEL_VALUES[key];
+    }
+
+    // All dependencies healthy so the handler reaches JSON serialisation
+    mockPrisma.$queryRaw.mockResolvedValue([1]);
+    mockRedis.isReady = true;
+    mockRedis.ping.mockResolvedValue('PONG');
+    mockRpcServer.getLatestLedger.mockResolvedValue({ sequence: 5010 });
+    mockPrisma.syncState.findUnique.mockResolvedValue({ id: 1, lastLedger: 5005 });
+
+    app = express();
+    app.get('/health', async (_req, res) => {
+      const { runAllChecks: rac } = await import('../health');
+      const result = await rac();
+      const status = result.status === 'down' ? 503 : 200;
+      res.status(status).json(result);
+    });
+  });
+
+  afterEach(() => {
+    // Restore original env values
+    for (const key of SENTINEL_KEYS) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+  });
+
+  it('does not include DATABASE_URL secret in response body', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).not.toBe(500);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain('SECRET123');
+    expect(body).not.toContain(SENTINEL_VALUES.DATABASE_URL);
+  });
+
+  it('does not include REDIS_URL secret in response body', async () => {
+    const res = await request(app).get('/health');
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain('SECRET456');
+    expect(body).not.toContain(SENTINEL_VALUES.REDIS_URL);
+  });
+
+  it('does not include STELLAR_RPC_URL secret in response body', async () => {
+    const res = await request(app).get('/health');
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain('SECRET789');
+    expect(body).not.toContain(SENTINEL_VALUES.STELLAR_RPC_URL);
+  });
+
+  it('response body contains expected status fields, not raw env values', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    const body = JSON.stringify(res.body);
+    // Confirm the response has the expected health structure
+    expect(res.body).toHaveProperty('status');
+    expect(res.body).toHaveProperty('checks');
+    // None of the sentinel secrets should appear anywhere in the serialised body
+    for (const val of Object.values(SENTINEL_VALUES)) {
+      expect(body).not.toContain(val);
+    }
+    // The raw sentinel substrings should also be absent
+    expect(body).not.toContain('SECRET123');
+    expect(body).not.toContain('SECRET456');
+    expect(body).not.toContain('SECRET789');
   });
 });

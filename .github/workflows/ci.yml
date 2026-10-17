@@ -94,3 +94,18 @@ jobs:
         run: |
           bash scripts/migrations/lint-migration.sh \
             indexer/prisma/migrations/20260827000000_example_expand_contract/migration.sql
+
+  # ── OpenAPI spec validation ──────────────────────────────────────────────────
+  # Validates that the committed openapi.json matches the current route schemas.
+  # Fails if the spec is stale, requiring the developer to regenerate and commit
+  # the updated specification.
+  openapi-validation:
+    name: OpenAPI Specification Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate OpenAPI spec matches routes
+        run: npm run validate:openapi
