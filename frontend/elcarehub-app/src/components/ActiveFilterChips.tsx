@@ -116,7 +116,7 @@ export function ActiveFilterChips({ filters, dispatch, collections = [], classNa
             type="button"
             onClick={chip.onRemove}
             aria-label={`Remove filter: ${chip.label}`}
-            className="flex h-4 w-4 items-center justify-center rounded-full text-brand-500 hover:bg-brand-200 hover:text-brand-800 transition-colors"
+            className="flex h-4 w-4 items-center justify-center rounded-full text-brand-500 hover:bg-brand-200 hover:text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 transition-colors"
           >
             <X size={11} aria-hidden="true" />
           </button>
