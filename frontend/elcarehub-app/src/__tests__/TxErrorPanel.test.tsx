@@ -104,6 +104,37 @@ describe("TxErrorPanel", () => {
     render(<TxErrorPanel error={{ category: "unknown", message: "some raw rpc error code 42" }} />);
     expect(screen.getByText(/technical details/i)).toBeInTheDocument();
   });
+
+  it("wallet_rejection: describes as cancelled/rejected signature, NOT as contract failure", () => {
+    render(<TxErrorPanel error={mkErr("wallet_rejection")} />);
+    expect(screen.getByText(/signing request declined/i)).toBeInTheDocument();
+    expect(screen.getByText(/not submitted and nothing was charged/i)).toBeInTheDocument();
+    // Must not surface contract-failure language for a voluntary rejection.
+    expect(screen.queryByText(/transaction preview failed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/network error/i)).not.toBeInTheDocument();
+  });
+
+  it("simulation_failure: describes as contract/preview failure, distinguishable from rejection", () => {
+    render(<TxErrorPanel error={mkErr("simulation_failure")} />);
+    expect(screen.getByText(/transaction preview failed/i)).toBeInTheDocument();
+    // Must not surface rejection language for a genuine contract failure.
+    expect(screen.queryByText(/signing request declined/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/you declined/i)).not.toBeInTheDocument();
+  });
+
+  it("rpc_failure: describes as network error, distinguishable from rejection", () => {
+    render(<TxErrorPanel error={mkErr("rpc_failure")} />);
+    expect(screen.getByText(/network error/i)).toBeInTheDocument();
+    expect(screen.queryByText(/signing request declined/i)).not.toBeInTheDocument();
+  });
+
+  it("unknown: uses safe fallback without leaking raw secrets or stack traces", () => {
+    render(<TxErrorPanel error={{ category: "unknown", message: "some raw rpc error code 42" }} />);
+    expect(screen.getByText(/transaction failed/i)).toBeInTheDocument();
+    // Raw message is only in the collapsed technical-details block, not in the
+    // primary title/explanation copy.
+    expect(screen.getByText(/technical details/i)).toBeInTheDocument();
+  });
 });
 
 // ── TxErrorInline ─────────────────────────────────────────────────────────────

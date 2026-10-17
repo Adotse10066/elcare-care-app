@@ -20,6 +20,8 @@ module.exports = {
   moduleNameMapper: {
     // Path alias
     '^@/(.*)$': '<rootDir>/src/$1',
+    // Workspace package not linked at frontend level — mock for tests
+    '^@elcarehub/config$': '<rootDir>/src/__mocks__/configMock.js',
     // Static file mocks
     '\\.(jpg|jpeg|png|gif|webp|svg|ico)$': '<rootDir>/src/__mocks__/fileMock.js',
     '\\.(css|less|scss|sass)$': '<rootDir>/src/__mocks__/fileMock.js',
