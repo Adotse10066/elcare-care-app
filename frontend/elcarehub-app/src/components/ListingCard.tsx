@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Listing, stroopsToXlm } from "@/lib/contract";
+import { getTokenConfigByAddress, DEFAULT_TOKEN, baseUnitsToDisplay } from "@/config/tokens";
 import { buildExpectedBuyArtworkIntent } from "@/lib/tx-intent";
 import { ArtworkMetadata, fetchMetadata, getGatewayUrls } from "@/lib/ipfs";
 import { useWalletContext } from "@/context/WalletContext";
@@ -307,22 +308,32 @@ export function ListingCard({ listing, onPurchased }: ListingCardProps) {
         </div>
 
         <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-brand-600">
-            <Tag size={14} />
-            {/* `title` and `data-raw-amount` expose the raw base-unit
-                (stroop) price alongside the formatted display value so a
-                search/filter result can be verified precisely (e.g. by
-                tests, or a user hovering to confirm the exact amount)
-                without relying on locale-formatted string parsing. */}
-            <span
-              className="text-lg font-bold"
-              title={`${listing.price.toString()} stroops`}
-              data-raw-amount={listing.price.toString()}
-              data-display-amount={`${stroopsToXlm(listing.price)} XLM`}
-            >
-              {stroopsToXlm(listing.price)} XLM
-            </span>
-          </div>
+          {(() => {
+            const tokenConfig = listing.token ? getTokenConfigByAddress(listing.token) : undefined;
+            const decimals = tokenConfig?.decimals ?? 7;
+            const formattedAmount = baseUnitsToDisplay(listing.price, decimals);
+            const tokenSymbol = tokenConfig?.symbol ?? (listing.currency || (listing.token ? "UNKNOWN" : DEFAULT_TOKEN.symbol));
+            const displayStr = `${formattedAmount} ${tokenSymbol}`;
+
+            return (
+              <div className="flex items-center gap-1.5 text-brand-600">
+                <Tag size={14} />
+                {/* `title` and `data-raw-amount` expose the raw base-unit
+                    price alongside the formatted display value so a
+                    search/filter result can be verified precisely (e.g. by
+                    tests, or a user hovering to confirm the exact amount)
+                    without relying on locale-formatted string parsing. */}
+                <span
+                  className="text-lg font-bold"
+                  title={`${listing.price.toString()} base units`}
+                  data-raw-amount={listing.price.toString()}
+                  data-display-amount={displayStr}
+                >
+                  {displayStr}
+                </span>
+              </div>
+            );
+          })()}
 
           {listing.status === "Active" && (
             <GuardButton

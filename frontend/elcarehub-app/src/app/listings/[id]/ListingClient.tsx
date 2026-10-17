@@ -22,6 +22,7 @@ import { useListingOffers, useMakeOffer } from "@/hooks/useOffers";
 import { useListingActivity } from "@/hooks/useUserActivity";
 import { useListingHistory } from "@/hooks/useListingHistory";
 import { getListingPriceHistory, PriceHistoryPoint } from "@/lib/indexer";
+import { useIndexerFreshness } from "@/hooks/useIndexerFreshness";
 import { useReconciliation, generatePendingId } from "@/hooks/useReconciliation";
 import { ProvisionalBadge } from "@/components/ProvisionalBadge";
 import { ProvenanceTimeline } from "@/components/ProvenanceTimeline";
@@ -223,6 +224,23 @@ export default function ListingDetailPage({ id }: ListingClientProps) {
         loadDataRef.current = loadData;
     }, [loadData]);
 
+    // Issue #522 — indexer freshness/health for this listing or auction.
+    // Retrying re-checks indexer health and re-runs loadData() together.
+    const freshness = useIndexerFreshness({
+        resourceType: listing ? "listing" : auction ? "auction" : "default",
+        onRefresh: loadData,
+    });
+    useEffect(() => {
+        if (listing || auction) freshness.markUpdated();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [listing, auction]);
+
+    // Direct-chain verification link: point at the most recent event on this
+    // listing that carries a real (non-placeholder) transaction hash.
+    const verifiableTxHash = historyEvents.find(
+        (e) => e.tx_hash && !e.tx_hash.startsWith("ledger_")
+    )?.tx_hash;
+
     // Seed the reconciler's confirmed snapshot whenever a fresh listing
     // loads (initial load, manual refetch, or reorg-triggered reload) so
     // getResourceState() below has a confirmed value to fall back to.
@@ -316,9 +334,21 @@ export default function ListingDetailPage({ id }: ListingClientProps) {
 
     if (isLoading) {
         return (
-            <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-40 gap-4">
-                <div className="h-16 w-16 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" aria-hidden="true" />
-                <p className="text-brand-300 font-display italic">Summoning artwork from the savanna...</p>
+            <div role="status" aria-live="polite" data-testid="listing-loading-state" className="min-h-screen bg-midnight-950 pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+                <span className="sr-only">Loading artwork details…</span>
+                <div className="max-w-7xl mx-auto">
+                    <div className="w-32 h-6 rounded-lg bg-white/10 animate-pulse mb-8" />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <div className="aspect-square rounded-[2.5rem] bg-white/5 border border-white/5 animate-pulse" />
+                        <div className="space-y-6">
+                            <div className="w-3/4 h-12 rounded-2xl bg-white/10 animate-pulse" />
+                            <div className="w-1/2 h-6 rounded-lg bg-white/5 animate-pulse" />
+                            <div className="h-36 rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
+                            <div className="h-16 rounded-2xl bg-white/10 animate-pulse" />
+                            <div className="h-48 rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }

@@ -27,7 +27,7 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 describe('SearchFilter', () => {
-  it('renders the search input', () => {
+  it('renders the search input with an accessible name', () => {
     const onChange = jest.fn();
     render(
       <SearchFilter
@@ -39,6 +39,9 @@ describe('SearchFilter', () => {
       />
     );
     expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: /search marketplace/i })
+    ).toBeInTheDocument();
   });
 
   it('calls onFilterChange with updated search text', async () => {

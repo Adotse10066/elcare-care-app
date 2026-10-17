@@ -134,7 +134,7 @@ function makeListing(overrides: Partial<Listing> = {}): Listing {
     token_id: 1,
     price: 10_000_000n, // 1 XLM
     currency: 'XLM',
-    token: 'CTOKEN',
+    token: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
     recipients: [{ address: 'GARTIST123', percentage: 100 }],
     status: 'Active',
     owner: null,
@@ -155,6 +155,47 @@ describe('ListingCard', () => {
     // 10_000_000 stroops = 1 XLM
     await waitFor(() => {
       expect(screen.getByText(/1\s*XLM/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders a known token symbol from token configuration metadata', async () => {
+    // Testnet USDC token address
+    render(
+      <ListingCard
+        listing={makeListing({
+          price: 50_000_000n, // 5 USDC
+          token: 'CCW67Z72VRYZUM3BWHXYG6PVDZ4NMLN73Y7U7E4S3W4M7I5VBDQXWIXI',
+          currency: 'USDC',
+        })}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/5\s*USDC/i)).toBeInTheDocument();
+    });
+  });
+
+  it('handles missing or unknown token metadata without implying a different currency', async () => {
+    render(
+      <ListingCard
+        listing={makeListing({
+          price: 25_000_000n,
+          token: 'CUNKNOWN_TOKEN_ADDRESS_NOT_CONFIGURED',
+          currency: '',
+        })}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/2\.5\s*UNKNOWN/i)).toBeInTheDocument();
+      expect(screen.queryByText(/XLM/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('formats large integer amounts without floating-point precision loss', async () => {
+    // Amount exceeding Number.MAX_SAFE_INTEGER in base units
+    const largeAmount = 90_000_000_000_000_000n; // 9,000,000,000 XLM
+    render(<ListingCard listing={makeListing({ price: largeAmount })} />);
+    await waitFor(() => {
+      expect(screen.getByText(/9000000000\s*XLM/i)).toBeInTheDocument();
     });
   });
 
