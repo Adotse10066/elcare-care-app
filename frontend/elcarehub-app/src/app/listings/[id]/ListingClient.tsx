@@ -92,6 +92,11 @@ export default function ListingDetailPage({ id }: ListingClientProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [pageError, setPageError] = useState<PageStateError | null>(null);
     const [activeTab, setActiveTab] = useState<'details' | 'history' | 'offers'>('details');
+    // Issue 009 — track whether the detail image failed to load from its
+    // gateway URL. When true the fallback placeholder is shown instead.
+    // This is purely local presentation state: it never touches listing or
+    // auction data, and resets whenever the resolved imageUrl changes.
+    const [detailImageError, setDetailImageError] = useState(false);
 
     // Stable ref to the latest loadData implementation, so callbacks created
     // before loadData is defined (e.g. the reorg-reset handler below) always
@@ -358,6 +363,10 @@ export default function ListingDetailPage({ id }: ListingClientProps) {
     }
 
     const imageUrl = metadata?.image ? cidToGatewayUrl(metadata.image) : null;
+    // Reset the image error flag any time we get a new URL to try.
+    useEffect(() => {
+        setDetailImageError(false);
+    }, [imageUrl]);
     const artist = listing?.artist || auction?.creator;
     const isOwn = publicKey === artist;
     const status = listing?.status || auction?.status;
@@ -418,7 +427,7 @@ export default function ListingDetailPage({ id }: ListingClientProps) {
                 <div className="space-y-8 animate-fade-in-left">
                     {/* Main Artwork Frame */}
                     <div className="relative aspect-square overflow-hidden rounded-[2.5rem] bg-midnight-900 border border-white/5 shadow-2xl group">
-                        {imageUrl ? (
+                        {imageUrl && !detailImageError ? (
                             <Image
                                 src={imageUrl}
                                 alt={
@@ -430,9 +439,18 @@ export default function ListingDetailPage({ id }: ListingClientProps) {
                                 className="object-cover transition-transform duration-700 group-hover:scale-105"
                                 priority
                                 unoptimized
+                                onError={() => setDetailImageError(true)}
+                                data-testid="detail-artwork-img"
                             />
                         ) : (
-                            <div className="flex h-full flex-col items-center justify-center text-8xl opacity-20">
+                            // Shown when: no image CID, gateway URL resolves to nothing, or
+                            // the <img> fires an error event (Issue 009).  The placeholder
+                            // intentionally does NOT claim to depict the artwork.
+                            <div
+                                className="flex h-full flex-col items-center justify-center text-8xl opacity-20"
+                                aria-label="Artwork image unavailable"
+                                data-testid="detail-artwork-missing"
+                            >
                                 🎨
                                 <span className="text-lg font-display mt-4 italic">No media available</span>
                             </div>

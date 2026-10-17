@@ -8,6 +8,8 @@
  * - User rejection: shows a cancellation message, not a generic error
  * - getTxExplorerUrl: returns correct URLs for testnet / mainnet / missing hash
  * - isUserRejectionError integration: recognised phrases suppress generic errors
+ * - Toast dismissal (Issue 016): manual dismiss, auto-timeout, accessible name,
+ *   and dismissal isolation from transaction state
  */
 
 import React from 'react';
@@ -40,7 +42,7 @@ jest.mock('@/lib/errors', () => {
 
 import { useTxToast, getTxExplorerUrl } from '@/hooks/useTxToast';
 import { isUserRejectionError } from '@/lib/errors';
-import { ToastProvider } from '@/components/ToastProvider';
+import { ToastProvider, useToast } from '@/components/ToastProvider';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -348,5 +350,215 @@ describe('useTxToast — failure lifecycle', () => {
       const messages = alerts.map((el) => el.textContent ?? '');
       expect(messages.some((m) => m.includes('stellar.expert'))).toBe(false);
     });
+  });
+});
+
+// ── Toast dismissal (Issue 016) ───────────────────────────────────────────────
+//
+// These tests target ToastProvider behaviour directly, keeping them decoupled
+// from the transaction state machine.  A minimal harness pushes a toast via
+// useToast() and the suite asserts dismissal semantics independently.
+
+/**
+ * A minimal component that exposes toast operations via data-testid attributes.
+ * It intentionally holds no transaction state so we can verify that dismissing
+ * a notification never mutates anything beyond the toast list.
+ */
+function ToastHarness() {
+  const { pushToast, dismissToast } = useToast();
+  const [lastDismissedId, setLastDismissedId] = React.useState<string | null>(null);
+
+  return (
+    <div>
+      <button
+        data-testid="push-info"
+        onClick={() => pushToast('Hello world', 'info', 60_000)}
+      >
+        push info
+      </button>
+      <button
+        data-testid="push-success"
+        onClick={() => pushToast('All done', 'success', 60_000)}
+      >
+        push success
+      </button>
+      <button
+        data-testid="push-short"
+        onClick={() => pushToast('Gone soon', 'info', 100)}
+      >
+        push short-lived
+      </button>
+      {/* Expose the last dismissed id so tests can assert isolation */}
+      <span data-testid="last-dismissed">{lastDismissedId ?? ''}</span>
+    </div>
+  );
+}
+
+function renderToastHarness() {
+  return render(
+    <ToastProvider>
+      <ToastHarness />
+    </ToastProvider>
+  );
+}
+
+describe('Toast dismissal (Issue 016)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  // ── Manual dismissal ────────────────────────────────────────────────────────
+
+  it('dismiss button removes the toast from the live region', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    renderToastHarness();
+
+    await user.click(screen.getByTestId('push-info'));
+
+    // Toast should be present
+    expect(screen.getByText('Hello world')).toBeInTheDocument();
+
+    // Click the dismiss button on that toast
+    await user.click(screen.getByRole('button', { name: /dismiss notification/i }));
+
+    // Toast must be gone
+    expect(screen.queryByText('Hello world')).not.toBeInTheDocument();
+  });
+
+  it('dismissing one toast does not remove other toasts', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    renderToastHarness();
+
+    // Push two toasts
+    await user.click(screen.getByTestId('push-info'));
+    await user.click(screen.getByTestId('push-success'));
+
+    expect(screen.getByText('Hello world')).toBeInTheDocument();
+    expect(screen.getByText('All done')).toBeInTheDocument();
+
+    // Dismiss only the first one
+    const dismissButtons = screen.getAllByRole('button', { name: /dismiss notification/i });
+    await user.click(dismissButtons[0]);
+
+    expect(screen.queryByText('Hello world')).not.toBeInTheDocument();
+    expect(screen.getByText('All done')).toBeInTheDocument();
+  });
+
+  // ── Accessible dismiss button ───────────────────────────────────────────────
+
+  it('every dismiss button has an accessible name', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    renderToastHarness();
+
+    await user.click(screen.getByTestId('push-info'));
+    await user.click(screen.getByTestId('push-success'));
+
+    const dismissButtons = screen.getAllByRole('button', { name: /dismiss notification/i });
+    expect(dismissButtons.length).toBeGreaterThanOrEqual(2);
+    for (const btn of dismissButtons) {
+      // getByRole with name already validates the accessible name is non-empty,
+      // but we also assert aria-label is explicitly set (not relying on inner text).
+      expect(btn).toHaveAttribute('aria-label', 'Dismiss notification');
+    }
+  });
+
+  // ── Auto-timeout ────────────────────────────────────────────────────────────
+
+  it('toast disappears automatically after its configured duration', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    renderToastHarness();
+
+    // Push a toast with a 100 ms lifetime
+    await user.click(screen.getByTestId('push-short'));
+    expect(screen.getByText('Gone soon')).toBeInTheDocument();
+
+    // Advance time past the timeout
+    act(() => {
+      jest.advanceTimersByTime(150);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Gone soon')).not.toBeInTheDocument();
+    });
+  });
+
+  it('manually dismissed toast does not reappear after its original timeout fires', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    renderToastHarness();
+
+    // Push a short-lived toast
+    await user.click(screen.getByTestId('push-short'));
+    expect(screen.getByText('Gone soon')).toBeInTheDocument();
+
+    // Manually dismiss before the timer fires
+    await user.click(screen.getByRole('button', { name: /dismiss notification/i }));
+    expect(screen.queryByText('Gone soon')).not.toBeInTheDocument();
+
+    // Now let the original timeout fire — the toast should still be absent
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Gone soon')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Dismissal does not mutate transaction state ─────────────────────────────
+  //
+  // Render the full useTxToast harness, run a successful transaction so we
+  // have a real toast present, then dismiss it and confirm the phase/isRunning
+  // values are unchanged — dismissing UI feedback never cancels or alters the
+  // underlying transaction.
+
+  it('dismissing a toast does not alter transaction phase or isRunning', async () => {
+    // Use real timers for the tx harness (fake timers conflict with promises)
+    jest.useRealTimers();
+
+    const user = userEvent.setup();
+
+    // A transaction that resolves immediately
+    const successFn = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <ToastProvider>
+        <TxToastHarness fn={successFn} action="Offer" />
+      </ToastProvider>
+    );
+
+    // Run the transaction to completion so a success toast is visible
+    await user.click(screen.getByTestId('trigger'));
+
+    // Wait for the success toast to appear
+    await waitFor(() => {
+      const statuses = screen.getAllByRole('status', { hidden: true });
+      expect(statuses.some((el) => (el.textContent ?? '').includes('confirmed'))).toBe(true);
+    });
+
+    // Record phase before dismissal
+    const phaseBefore = screen.getByTestId('phase').textContent;
+    const runningBefore = screen.getByTestId('running').textContent;
+
+    // Dismiss ALL visible toasts
+    const dismissButtons = screen.queryAllByRole('button', { name: /dismiss notification/i });
+    for (const btn of dismissButtons) {
+      await user.click(btn);
+    }
+
+    // Toasts should be gone from the live region
+    await waitFor(() => {
+      expect(screen.queryAllByRole('status', { hidden: true }).length).toBe(0);
+      expect(screen.queryAllByRole('alert', { hidden: true }).length).toBe(0);
+    });
+
+    // Transaction phase and running state must be unchanged
+    expect(screen.getByTestId('phase').textContent).toBe(phaseBefore);
+    expect(screen.getByTestId('running').textContent).toBe(runningBefore);
   });
 });
