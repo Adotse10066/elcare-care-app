@@ -48,4 +48,21 @@ describe('Regression Test: Invalid Listing IDs', () => {
     expect(screen.getByText(/Artwork not found/i, { selector: 'p' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Return to Marketplace/i })).toBeInTheDocument()
   })
+
+  it('renders a clear loading state while listing query is pending without flashing false not-found', () => {
+    let resolveListing: (value: any) => void
+    const pendingPromise = new Promise((resolve) => {
+      resolveListing = resolve
+    })
+    ;(getListing as jest.Mock).mockReturnValueOnce(pendingPromise)
+
+    render(<ListingDetailPage params={{ id: '2' }} />)
+
+    // Verify loading indication is immediately visible
+    expect(screen.getByTestId('listing-loading-state')).toBeInTheDocument()
+    expect(screen.getByText(/Loading artwork details…/i)).toBeInTheDocument()
+
+    // Assert that not-found heading is NOT present while request is pending
+    expect(screen.queryByRole('heading', { name: /Artwork Not Found/i })).not.toBeInTheDocument()
+  })
 })

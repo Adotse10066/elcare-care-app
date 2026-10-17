@@ -203,4 +203,47 @@ describe("useFilterUrlSync", () => {
       scroll: false,
     });
   });
+
+  // ── Regression: Returning to results / restoring filter state (Issue #867) ──
+
+  it("restores all URL-backed filter selections when returning to results", () => {
+    // Simulate user navigating to a listing and hitting browser back / returning
+    // to results page with URL query parameters preserved
+    mockSearchParams = new URLSearchParams(
+      "q=modern+mask&status=Active&collection=sculptures&minPrice=20&maxPrice=150&artist=GARTIST1&sort=price-low&page=2"
+    );
+    const { api } = renderConsumer();
+    const { initialFilters, initialPage } = api();
+
+    expect(initialFilters).toEqual<Filters>({
+      search: "modern mask",
+      status: "Active",
+      collection: ["sculptures"],
+      minPrice: "20",
+      maxPrice: "150",
+      artist: "GARTIST1",
+      sort: "price-low",
+    });
+    expect(initialPage).toBe(2);
+  });
+
+  it("maintains URL query synchronization without unexpected reloading or state drops", () => {
+    const { api } = renderConsumer();
+    const activeFilters: Filters = {
+      search: "african pattern",
+      status: "Active",
+      collection: ["Origins"],
+      minPrice: "10",
+      maxPrice: "500",
+      artist: "GARTIST2",
+      sort: "price-high",
+    };
+
+    api().syncToUrl(activeFilters, 3);
+
+    expect(mockReplace).toHaveBeenCalledWith(
+      "/explore?q=african+pattern&status=Active&collection=Origins&minPrice=10&maxPrice=500&artist=GARTIST2&sort=price-high&page=3",
+      { scroll: false }
+    );
+  });
 });

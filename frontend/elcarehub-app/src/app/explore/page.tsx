@@ -248,9 +248,13 @@ export default function ExplorePage() {
 
           <div className="relative flex-1 w-full max-w-xl">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <label htmlFor="explore-search-input" className="sr-only">
+              Search marketplace
+            </label>
             <input
               type="text"
               id="explore-search-input"
+              aria-label="Search marketplace"
               placeholder="Search by title, artist, or description..."
               value={filters.search}
               onChange={(e) => dispatch({ type: "SET_SEARCH", payload: e.target.value })}
