@@ -224,7 +224,7 @@ function TxLink({ txHash }: { txHash: string }) {
       data-testid="tx-link"
     >
       {shortAddr(txHash)}
-      <ExternalLink size={9} />
+      <ExternalLink size={9} aria-hidden="true" />
     </a>
   );
 }
@@ -238,7 +238,7 @@ function ConfirmationBadge({ confirmed }: { confirmed?: boolean }) {
       title="This event is confirmed on-chain"
       data-testid="badge-confirmed"
     >
-      <Shield size={8} />
+      <Shield size={8} aria-hidden="true" />
       Confirmed
     </span>
   ) : (
@@ -247,7 +247,7 @@ function ConfirmationBadge({ confirmed }: { confirmed?: boolean }) {
       title="This event is provisional and may be rolled back"
       data-testid="badge-pending"
     >
-      <Clock size={8} />
+      <Clock size={8} aria-hidden="true" />
       Pending
     </span>
   );
@@ -276,7 +276,7 @@ function ReorgBanner({ onRefresh }: ReorgBannerProps) {
       role="alert"
       data-testid="reorg-banner"
     >
-      <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+      <AlertTriangle size={16} className="text-amber-400 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold text-amber-300">Chain reorganization detected</p>
         <p className="text-[11px] text-amber-400/70 mt-0.5">
@@ -288,7 +288,7 @@ function ReorgBanner({ onRefresh }: ReorgBannerProps) {
         className="flex items-center gap-1.5 text-xs font-bold text-amber-300 hover:text-amber-200 shrink-0 transition-colors"
         data-testid="reorg-refresh-btn"
       >
-        <RefreshCw size={12} />
+        <RefreshCw size={12} aria-hidden="true" />
         Refresh
       </button>
     </div>
@@ -325,7 +325,7 @@ export function ProvenanceTimeline({
         className="flex flex-col items-center justify-center py-12 gap-3"
         data-testid="timeline-loading"
       >
-        <Loader2 size={28} className="animate-spin text-brand-400" />
+        <Loader2 size={28} className="animate-spin text-brand-400" aria-hidden="true" />
         <p className="text-xs text-white/40 italic">Loading provenance…</p>
       </div>
     );
@@ -348,7 +348,7 @@ export function ProvenanceTimeline({
         className="py-10 text-center text-white/30"
         data-testid="timeline-empty"
       >
-        <History size={40} className="mx-auto mb-4 opacity-20" />
+        <History size={40} className="mx-auto mb-4 opacity-20" aria-hidden="true" />
         <p className="italic text-sm">No activity recorded yet</p>
       </div>
     );
@@ -443,7 +443,7 @@ export function ProvenanceTimeline({
             data-testid="load-more-button"
           >
             {isLoadingMore ? (
-              <Loader2 size={12} className="animate-spin" />
+              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
             ) : null}
             {isLoadingMore ? "Loading…" : "Load more"}
           </button>
