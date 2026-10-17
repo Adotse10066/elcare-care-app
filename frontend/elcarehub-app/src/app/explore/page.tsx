@@ -327,16 +327,33 @@ export default function ExplorePage() {
           )}
 
           {!isLoading && !error && listings.length === 0 && (
-            <ResourceState
-              isLoading={false}
-              error={null}
-              isEmpty
-              empty={{
-                title: "No artworks found",
-                description: "Try adjusting your filters or search criteria.",
-                action: { label: "Clear all filters", onClick: () => dispatch({ type: "CLEAR_ALL" }) },
-              }}
-            />
+            (() => {
+              const hasActiveFilters =
+                filters.search.trim() !== "" ||
+                filters.status !== "All" ||
+                filters.collection.length > 0 ||
+                filters.minPrice !== "" ||
+                filters.maxPrice !== "" ||
+                filters.artist !== "" ||
+                filters.sort !== "newest";
+
+              return (
+                <ResourceState
+                  isLoading={false}
+                  error={null}
+                  isEmpty
+                  empty={{
+                    title: hasActiveFilters ? "No matching artworks" : "No artworks yet",
+                    description: hasActiveFilters
+                      ? "No listings match your current filters or search terms. Try clearing or relaxing your filters to discover more works."
+                      : "The marketplace doesn't have any listings yet. Check back soon for new artworks from creators.",
+                    action: hasActiveFilters
+                      ? { label: "Clear all filters", onClick: () => dispatch({ type: "CLEAR_ALL" }) }
+                      : undefined,
+                  }}
+                />
+              );
+            })()
           )}
 
           {!isLoading && !error && listings.length > 0 && (

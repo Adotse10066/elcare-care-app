@@ -160,8 +160,12 @@ export function ListingCard({ listing, onPurchased }: ListingCardProps) {
         data-testid={`listing-card-${listing.listing_id}`}
         className="group flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow"
       >
-      {/* Image */}
-      <Link href={`/listings/${listing.listing_id}`}>
+      {/* Image Link */}
+      <Link
+        href={`/listings/${listing.listing_id}`}
+        aria-label={`View artwork: ${metadata?.title ?? `Artwork #${listing.listing_id}`}`}
+        className="block focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-inset"
+      >
         <div className="relative aspect-square overflow-hidden bg-brand-50">
           {isLoading ? (
             /* Loading skeleton */
@@ -184,9 +188,9 @@ export function ListingCard({ listing, onPurchased }: ListingCardProps) {
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); handleRetry(); }}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-600 hover:bg-brand-100 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-600 hover:bg-brand-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 transition-colors"
                 data-testid="artwork-retry-btn"
-                aria-label="Retry loading artwork"
+                aria-label={`Retry loading artwork: ${metadata?.title ?? `Artwork #${listing.listing_id}`}`}
               >
                 <RefreshCw size={11} />
                 Retry
@@ -259,7 +263,10 @@ export function ListingCard({ listing, onPurchased }: ListingCardProps) {
 
       {/* Info */}
       <div className="flex flex-1 flex-col p-4">
-        <Link href={`/listings/${listing.listing_id}`}>
+        <Link
+          href={`/listings/${listing.listing_id}`}
+          className="rounded focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+        >
           <h3 className="truncate text-base font-semibold text-gray-900 hover:text-brand-600 transition-colors">
             {metadata?.title ?? `Artwork #${listing.listing_id}`}
           </h3>
@@ -323,8 +330,9 @@ export function ListingCard({ listing, onPurchased }: ListingCardProps) {
               onAction={() => setShowCheckout(true)}
               disabled={isBuying || isOwn}
               actionName="To purchase this artwork"
+              aria-label={`Buy now: ${metadata?.title ?? `Artwork #${listing.listing_id}`}`}
               title={isOwn ? "You cannot buy your own listing" : undefined}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-md shadow-brand-500/20 active:scale-95"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-md shadow-brand-500/20 active:scale-95"
             >
               <ShoppingCart size={14} />
               {isBuying ? "Buying…" : isOwn ? "Yours" : "Buy Now"}

@@ -12,8 +12,8 @@ import userEvent from '@testing-library/user-event';
 // Next.js Link — render as a plain <a>
 jest.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
+  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} {...rest}>{children}</a>
   ),
 }));
 
@@ -78,14 +78,15 @@ jest.mock('@/components/WalletGuard', () => ({
     disabled,
     className,
     title,
+    ...rest
   }: {
     children: React.ReactNode;
-    onAction: () => void;
+    onAction?: () => void;
     disabled?: boolean;
     className?: string;
     title?: string;
-  }) => (
-    <button onClick={onAction} disabled={disabled} className={className} title={title}>
+  } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button onClick={onAction} disabled={disabled} className={className} title={title} {...rest}>
       {children}
     </button>
   ),
@@ -249,6 +250,33 @@ describe('ListingCard', () => {
       const links = screen.getAllByRole('link');
       expect(links.some((l) => l.getAttribute('href') === '/listings/3')).toBe(true);
     });
+  });
+
+  it('provides distinct accessible names and keyboard focus order for interactive elements', async () => {
+    const user = userEvent.setup();
+    render(<ListingCard listing={makeListing({ listing_id: 42 })} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Artwork')).toBeInTheDocument();
+    });
+
+    const imageLink = screen.getByRole('link', { name: /view artwork: test artwork/i });
+    const titleLink = screen.getByRole('link', { name: /test artwork/i });
+    const buyButton = screen.getByRole('button', { name: /buy now: test artwork/i });
+
+    expect(imageLink).toBeInTheDocument();
+    expect(titleLink).toBeInTheDocument();
+    expect(buyButton).toBeInTheDocument();
+
+    // Tab through interactive controls in logical order
+    await user.tab();
+    expect(imageLink).toHaveFocus();
+
+    await user.tab();
+    expect(titleLink).toHaveFocus();
+
+    await user.tab();
+    expect(buyButton).toHaveFocus();
   });
 
   it('shows a fallback title when IPFS metadata is unavailable', async () => {

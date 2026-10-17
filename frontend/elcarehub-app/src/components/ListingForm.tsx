@@ -853,6 +853,7 @@ export function ListingForm({ listing, onSuccess, onCancel }: ListingFormProps) 
                 }}
                 onBlur={() => markTouched("tokenAddress")}
                 aria-invalid={shouldShowError("tokenAddress") && !!errors.tokenAddress}
+                aria-describedby={errors.tokenAddress ? "err-tokenaddress" : undefined}
                 className={`w-full appearance-none rounded-2xl border px-5 py-4 text-base focus:outline-none transition-all shadow-sm font-inter ${
                   shouldShowError("tokenAddress") && errors.tokenAddress
                     ? "border-red-400 bg-red-50/40 focus:border-red-500"
@@ -870,7 +871,7 @@ export function ListingForm({ listing, onSuccess, onCancel }: ListingFormProps) 
                 )}
               </select>
               {shouldShowError("tokenAddress") && errors.tokenAddress && (
-                <p className="text-sm text-red-600 mt-1" role="alert">
+                <p id="err-tokenaddress" className="text-sm text-red-600 mt-1" role="alert">
                   {errors.tokenAddress}
                 </p>
               )}
