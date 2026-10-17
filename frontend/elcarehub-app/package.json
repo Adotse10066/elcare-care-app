@@ -19,6 +19,9 @@
     "test:visual": "playwright test tests/e2e/visual-regression.spec.ts",
     "test:visual:update": "playwright test tests/e2e/visual-regression.spec.ts --update-snapshots"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@lobstrco/signer-extension-api": "^2.0.0",
     "@magic-ext/oauth2": "^11.5.0",
