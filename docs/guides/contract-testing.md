@@ -35,7 +35,7 @@ contracts/
 * **Rust**: stable toolchain with target `wasm32v1-none` (or `wasm32-unknown-unknown`)
 * **Stellar CLI**: `stellar` CLI tool installed (`cargo install --locked stellar-cli`)
 
-### Run All Unit Tests
+### Run All Unit Tests (full workspace)
 ```bash
 cargo test
 ```
@@ -48,14 +48,63 @@ test test::test_buy_listing_transfers_funds_and_royalties ... ok
 test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-### Run Tests for Specific Contract
+### Run Tests for a Single Named Contract
+
+Use the `-p` flag with the **exact package name** from that contract's `Cargo.toml`.
+All commands run from the **repository root** — no `cd` needed.
+
+#### Marketplace contract (`soroban-marketplace`)
 ```bash
-cargo test -p soroban_marketplace
+cargo test -p soroban-marketplace
 ```
+
+#### Launchpad factory contract (`soroban-launchpad`)
+
+The launchpad integration tests deploy child collection contracts, so the four
+collection WASMs must be compiled first:
+
+```bash
+# Step 1 — build collection WASMs (run once, or whenever a collection contract changes)
+cargo build --target wasm32v1-none --release \
+  -p collection-nft-erc721 \
+  -p collection-nft-erc1155 \
+  -p lazy-mint-erc721 \
+  -p lazy-mint-erc1155
+
+# Step 2 — run launchpad tests
+cargo test -p soroban-launchpad
+```
+
+#### Standard ERC-721 NFT collection (`collection-nft-erc721`)
+```bash
+cargo test -p collection-nft-erc721
+```
+
+#### Standard ERC-1155 NFT collection (`collection-nft-erc1155`)
+```bash
+cargo test -p collection-nft-erc1155
+```
+
+#### Lazy-mint ERC-721 collection (`lazy-mint-erc721`)
+```bash
+cargo test -p lazy-mint-erc721
+```
+
+#### Lazy-mint ERC-1155 collection (`lazy-mint-erc1155`)
+```bash
+cargo test -p lazy-mint-erc1155
+```
+
+> **Tip — run a single test by name** within any package:
+> ```bash
+> cargo test -p soroban-marketplace test_set_protocol_fee_rejects_non_admin_caller
+> ```
 
 ### Run Tests with Console Print Output (`std::println!`)
 ```bash
 cargo test -- --nocapture
+# or for a specific package:
+cargo test -p soroban-marketplace -- --nocapture
 ```
 
 ### Build Contract WASM Artifact
