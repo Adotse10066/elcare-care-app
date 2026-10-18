@@ -221,7 +221,9 @@ export function classifyTxError(err: unknown): TxErrorCategory {
 
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
 
-  // Wallet rejection signals from Freighter / Lobstr / Magic
+  // Wallet rejection signals from Freighter / Lobstr / Magic.
+  // Checked before simulation/rpc classification so a voluntary rejection is
+  // never mis-bucketed as a contract or network failure.
   if (
     msg.includes("user declined") ||
     msg.includes("user rejected") ||
@@ -229,6 +231,9 @@ export function classifyTxError(err: unknown): TxErrorCategory {
     msg.includes("cancelled") ||
     msg.includes("canceled") ||
     msg.includes("user denied") ||
+    msg.includes("user aborted") ||
+    msg.includes("signing aborted") ||
+    msg.includes("signature aborted") ||
     msg.includes("sign request was rejected") ||
     msg.includes("request rejected") ||
     msg.includes("declined")

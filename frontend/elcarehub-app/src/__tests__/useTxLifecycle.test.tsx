@@ -15,7 +15,6 @@ import {
   txStateLabel,
   isTxTerminal,
   isTxActive,
-  buildTxErrorMessage,
 } from "../hooks/useTxLifecycle";
 
 // ── Mock lookupTxOnRpc ────────────────────────────────────────────────────────
@@ -94,6 +93,31 @@ describe("classifyTxError", () => {
     expect(classifyTxError(new Error("some random error"))).toBe("unknown");
     expect(classifyTxError(null)).toBe("unknown");
     expect(classifyTxError(undefined)).toBe("unknown");
+  });
+
+  it("never labels a voluntary rejection as a contract or network failure", () => {
+    // A rejection message that also contains contract/network keywords must
+    // still classify as wallet_rejection (rejection is checked first).
+    expect(classifyTxError(new Error("user declined — contract error(contract, #42)"))).toBe("wallet_rejection");
+    expect(classifyTxError(new Error("User rejected the transaction; simulation failed"))).toBe("wallet_rejection");
+    expect(classifyTxError(new Error("user aborted signing due to network timeout"))).toBe("wallet_rejection");
+    expect(classifyTxError(new Error("signing aborted — insufficient funds"))).toBe("wallet_rejection");
+    expect(classifyTxError(new Error("signature aborted"))).toBe("wallet_rejection");
+    expect(classifyTxError(new Error("user aborted"))).toBe("wallet_rejection");
+  });
+
+  it("keeps a genuine contract failure distinguishable from user cancellation", () => {
+    expect(classifyTxError(new Error("contract error(contract, #42)"))).toBe("simulation_failure");
+    expect(classifyTxError(new Error("insufficient funds to pay fees"))).toBe("simulation_failure");
+    expect(classifyTxError(new Error("invoke_host_function error"))).toBe("simulation_failure");
+    expect(classifyTxError(new Error("simulation failed"))).toBe("simulation_failure");
+  });
+
+  it("keeps a genuine network failure distinguishable from user cancellation", () => {
+    expect(classifyTxError(new Error("network error"))).toBe("rpc_failure");
+    expect(classifyTxError(new Error("rpc unavailable"))).toBe("rpc_failure");
+    expect(classifyTxError(new Error("timeout waiting for submit"))).toBe("rpc_failure");
+    expect(classifyTxError(new Error("503 service unavailable"))).toBe("rpc_failure");
   });
 
   // Issue #536: the transaction-substitution guard in lib/contract.ts throws
