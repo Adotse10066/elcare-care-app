@@ -196,6 +196,18 @@ export async function deleteOldOperationalAuditRecords(
       ? { requestId: { notIn: holdIds } }
       : {};
 
+  // Emit a structured pre-action summary so operators can confirm the
+  // selected range and record class before any rows are removed.
+  // Retention thresholds and deletion logic below are unchanged.
+  // See docs/retention-archival.md §"OperationalAudit retention".
+  logger.info('[archive] OperationalAudit retention: pre-action summary', {
+    recordClass: 'OperationalAudit',
+    retentionDays,
+    cutoffDate: cutoffDate.toISOString(),
+    legalHoldExcluded: holdIds.length,
+    dryRun: DRY_RUN,
+  });
+
   if (DRY_RUN) {
     const count = await (prisma as any).operationalAudit.count({
       where: { createdAt: { lt: cutoffDate }, ...holdFilter },

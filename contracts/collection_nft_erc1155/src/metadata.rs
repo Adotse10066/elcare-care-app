@@ -28,7 +28,7 @@
 
 #![allow(dead_code)]
 
-use soroban_sdk::{String as SorobanString};
+use soroban_sdk::{Bytes, String as SorobanString};
 
 /// Maximum collection name length in bytes (UTF-8 encoded).
 pub const MAX_NAME_LEN: u32 = 64;
@@ -75,7 +75,8 @@ pub fn validate_symbol<E>(symbol: &SorobanString, empty_err: E, too_long_err: E)
 // ─── Max supply ─────────────────────────────────────────────────────────────
 
 /// Returns `Err(err)` when `max_supply` is 0 or exceeds `MAX_SUPPLY_LIMIT`.
-pub fn validate_max_supply<E>(max_supply: u64, err: E) -> Result<(), E> {
+/// Generic version — callers supply their own error variant.
+pub fn validate_max_supply_with_err<E>(max_supply: u64, err: E) -> Result<(), E> {
     if max_supply == 0 || max_supply > MAX_SUPPLY_LIMIT {
         return Err(err);
     }
@@ -85,7 +86,8 @@ pub fn validate_max_supply<E>(max_supply: u64, err: E) -> Result<(), E> {
 // ─── Royalty BPS ────────────────────────────────────────────────────────────
 
 /// Returns `Err(err)` when `bps` exceeds `MAX_ROYALTY_BPS` (10 000).
-pub fn validate_royalty_bps<E>(bps: u32, err: E) -> Result<(), E> {
+/// Generic version — callers supply their own error variant.
+pub fn validate_royalty_bps_with_err<E>(bps: u32, err: E) -> Result<(), E> {
     if bps > MAX_ROYALTY_BPS {
         return Err(err);
     }
@@ -102,6 +104,80 @@ pub fn validate_uri<E>(uri: &SorobanString, empty_err: E, too_long_err: E) -> Re
     }
     if uri.len() > MAX_URI_BYTES {
         return Err(too_long_err);
+    }
+    Ok(())
+}
+
+// ─── Contract-local fixed-error wrappers ────────────────────────────────────
+//
+// The generic helpers above accept caller-supplied error variants so they can
+// be reused across contracts.  The wrappers below bind them to the concrete
+// `crate::Error` variants used by this contract, providing a stable call-site
+// for the contract's own test module (metadata_tests) and any internal callers
+// that do not want to repeat the error arguments.
+
+use crate::Error;
+
+/// Validates the royalty BPS value for this contract.
+/// Returns `Err(Error::InvalidBps)` when `bps` exceeds `MAX_ROYALTY_BPS` (10 000).
+pub fn validate_royalty_bps(bps: u32) -> Result<(), Error> {
+    if bps > MAX_ROYALTY_BPS {
+        return Err(Error::InvalidBps);
+    }
+    Ok(())
+}
+
+/// Validates a collection name against the rules in this module.
+/// Returns `Err(Error::EmptyName)` or `Err(Error::NameTooLong)`.
+pub fn validate_collection_name(name: &SorobanString) -> Result<(), Error> {
+    validate_name(name, Error::EmptyName, Error::NameTooLong)
+}
+
+/// Validates a `max_supply` value for this contract.
+/// Returns `Err(Error::InvalidMaxSupply)` when `max_supply` is 0 or exceeds
+/// `MAX_SUPPLY_LIMIT` (1 000 000 000).
+///
+/// Note: the collection_nft_erc1155 contract does not enforce a per-collection
+/// `max_supply` at the collection level (supply caps are per-token), so this
+/// helper is provided for the metadata test suite and for callers that want to
+/// pre-validate a value before storing it.
+pub fn validate_max_supply(max_supply: u64) -> Result<(), Error> {
+    if max_supply == 0 || max_supply > MAX_SUPPLY_LIMIT {
+        return Err(Error::InvalidMaxSupply);
+    }
+    Ok(())
+}
+
+/// Validates a per-token or base URI for this contract.
+///
+/// Rejects:
+///   - Empty strings                    → `Error::EmptyUri`
+///   - Strings longer than 2 048 bytes  → `Error::UriTooLong`
+///   - `data:` scheme URIs              → `Error::InvalidUri`
+///     (inline data URIs embed unbounded payloads and are not a content-
+///      addressing scheme; `ipfs://` and `https://` URIs are accepted.)
+pub fn validate_token_uri(uri: &SorobanString) -> Result<(), Error> {
+    if uri.len() == 0 {
+        return Err(Error::EmptyUri);
+    }
+    if uri.len() > MAX_URI_BYTES {
+        return Err(Error::UriTooLong);
+    }
+    // Reject inline data URIs — they are not a content-addressing scheme and
+    // can carry unbounded payloads.  We convert to `Bytes` (which reuses the
+    // `Env` handle already embedded in `SorobanString`) so we can inspect
+    // individual bytes in no_std without requiring a separate `&Env` parameter.
+    //
+    // "data:" in ASCII: [100, 97, 116, 97, 58]
+    let bytes: soroban_sdk::Bytes = uri.clone().into();
+    if bytes.len() >= 5
+        && bytes.get(0) == Some(100u8) // 'd'
+        && bytes.get(1) == Some(97u8)  // 'a'
+        && bytes.get(2) == Some(116u8) // 't'
+        && bytes.get(3) == Some(97u8)  // 'a'
+        && bytes.get(4) == Some(58u8)  // ':'
+    {
+        return Err(Error::InvalidUri);
     }
     Ok(())
 }

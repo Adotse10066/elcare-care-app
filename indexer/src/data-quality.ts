@@ -231,7 +231,26 @@ async function checkOrphanRoyaltyPayments(): Promise<void> {
     )
     LIMIT ${QUERY_LIMIT}
   `;
-  orphanRoyaltyPaymentsGauge.set(Number(rows[0]?.cnt ?? 0n));
+  const count = Number(rows[0]?.cnt ?? 0n);
+  orphanRoyaltyPaymentsGauge.set(count);
+
+  // Warn when orphaned RoyaltyPayment rows are detected so the operator can
+  // identify the affected check and act on it promptly.
+  //
+  // A nonzero count means one or more RoyaltyPayment rows have no parent
+  // ROYALTY_PAID MarketplaceEvent at the same ledger sequence.  This usually
+  // indicates a missed or out-of-order event ingestion.
+  //
+  // Diagnostic procedure: docs/runbooks/observability-alerts.md §"ReconcilerDriftHigh"
+  if (count > 0) {
+    logger.warn('[DataQuality] Orphaned RoyaltyPayment rows detected', {
+      check: 'dq_orphan_royalty_payments',
+      eventType: 'ROYALTY_PAID',
+      orphanCount: count,
+      queryLimit: QUERY_LIMIT,
+      runbook: 'docs/runbooks/observability-alerts.md#ReconcilerDriftHigh',
+    });
+  }
 }
 
 async function checkListingsMissingRoyaltyBps(): Promise<void> {
