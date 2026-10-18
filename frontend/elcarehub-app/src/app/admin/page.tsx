@@ -90,7 +90,7 @@ export default function AdminPage() {
     const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
     const [selectedTokenHistory, setSelectedTokenHistory] = useState<TokenHistory | null>(null);
 
-    const { isAuthenticated, authenticate, logout, sessionExpiresIn } = useAdminSession(publicKey);
+    const { isAuthenticated, isExpired, authenticate, logout, sessionExpiresIn } = useAdminSession(publicKey);
 
     // Admin key rotation (Issue #202)
     const {
@@ -248,7 +248,7 @@ export default function AdminPage() {
         fetchFees();
     }, []);
 
-    const handleSetCollectionFee = async () => {
+    const handleSetCollectionFee = () => {
         const addr = collectionFeeAddress.trim();
         const bpsVal = parseInt(collectionFeeBps, 10);
         if (!addr) { setFeeError("Enter a collection contract address."); return; }
@@ -257,19 +257,34 @@ export default function AdminPage() {
             return;
         }
         setFeeError(null);
-        setIsFeeProcessing(true);
-        try {
-            // Optimistically update the table
-            setCollectionFeeRows((prev) => {
-                const existing = prev.find((r) => r.address === addr);
-                if (existing) return prev.map((r) => r.address === addr ? { ...r, fee_bps: bpsVal } : r);
-                return [...prev, { address: addr, fee_bps: bpsVal }];
-            });
-            setCollectionFeeAddress("");
-            setCollectionFeeBps("");
-        } finally {
-            setIsFeeProcessing(false);
-        }
+        // Integer-safe BPS → percentage: avoids floating-point arithmetic on the submitted value.
+        const pct = `${Math.floor(bpsVal / 100)}.${String(bpsVal % 100).padStart(2, "0")}`;
+        setConfirmConfig({
+            isOpen: true,
+            title: "Set Collection Fee",
+            actionDescription: `Setting fee for collection ${addr} to ${bpsVal} bps (${pct}%).`,
+            consequences: [
+                `The per-collection fee will be ${bpsVal} basis points (${pct}%).`,
+                "This overrides the global protocol fee for this collection.",
+                "Existing and future listings in this collection will use the new rate.",
+            ],
+            variant: "warning",
+            onConfirm: () => {
+                setIsFeeProcessing(true);
+                try {
+                    setCollectionFeeRows((prev) => {
+                        const existing = prev.find((r) => r.address === addr);
+                        if (existing) return prev.map((r) => r.address === addr ? { ...r, fee_bps: bpsVal } : r);
+                        return [...prev, { address: addr, fee_bps: bpsVal }];
+                    });
+                    setCollectionFeeAddress("");
+                    setCollectionFeeBps("");
+                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                } finally {
+                    setIsFeeProcessing(false);
+                }
+            }
+        });
     };
 
     const handleClearCollectionFee = (addr: string) => {
@@ -456,22 +471,38 @@ export default function AdminPage() {
     if (!isAuthenticated) {
         return (
             <div className="flex h-[80vh] flex-col items-center justify-center px-4 text-center">
-                <div className="mb-6 rounded-full bg-brand-100 p-6">
-                    <ShieldCheck className="h-12 w-12 text-brand-600" />
-                </div>
-                <h1 className="font-display text-4xl font-bold tracking-tight text-midnight-900 sm:text-5xl">
-                    Admin Session Required
-                </h1>
-                <p className="mt-4 max-w-lg text-lg text-gray-600 mb-8">
-                    To perform sensitive administrative actions, you must start a secure session.
-                    This session will automatically expire after 15 minutes of inactivity.
-                </p>
+                {isExpired ? (
+                    <>
+                        <div className="mb-6 rounded-full bg-red-100 p-6">
+                            <Clock className="h-12 w-12 text-red-500" />
+                        </div>
+                        <h1 className="font-display text-4xl font-bold tracking-tight text-midnight-900 sm:text-5xl">
+                            Session Expired
+                        </h1>
+                        <p className="mt-4 max-w-lg text-lg text-gray-600 mb-8">
+                            Your admin session has expired after 15 minutes of inactivity. Re-authenticate to continue.
+                        </p>
+                    </>
+                ) : (
+                    <>
+                        <div className="mb-6 rounded-full bg-brand-100 p-6">
+                            <ShieldCheck className="h-12 w-12 text-brand-600" />
+                        </div>
+                        <h1 className="font-display text-4xl font-bold tracking-tight text-midnight-900 sm:text-5xl">
+                            Admin Session Required
+                        </h1>
+                        <p className="mt-4 max-w-lg text-lg text-gray-600 mb-8">
+                            To perform sensitive administrative actions, you must start a secure session.
+                            This session will automatically expire after 15 minutes of inactivity.
+                        </p>
+                    </>
+                )}
                 <button
                     onClick={authenticate}
                     className="flex items-center gap-2 rounded-2xl bg-brand-600 px-8 py-4 text-lg font-bold text-white shadow-lg shadow-brand-200 transition-all hover:bg-brand-700 active:scale-95"
                 >
                     <KeyRound className="h-6 w-6" />
-                    Start Admin Session
+                    {isExpired ? "Re-authenticate" : "Start Admin Session"}
                 </button>
             </div>
         );
@@ -793,6 +824,109 @@ export default function AdminPage() {
                                 </div>
                             )}
                         </div>
+                    </section>
+
+                    {/* Per-Collection Fee Overrides (Issue #322) */}
+                    <section className="lg:col-span-2 rounded-3xl bg-white p-8 shadow-sm border border-brand-100">
+                        <div className="mb-6 flex items-center gap-3">
+                            <div className="rounded-xl bg-yellow-100 p-2.5">
+                                <BarChart3 className="h-6 w-6 text-yellow-600" />
+                            </div>
+                            <div>
+                                <h2 className="font-display text-2xl font-bold text-midnight-950">Per-Collection Fees</h2>
+                                <p className="mt-0.5 text-sm text-gray-500">Override the global protocol fee for specific collections.</p>
+                            </div>
+                        </div>
+
+                        <div className="mb-6 flex max-w-2xl gap-2">
+                            <input
+                                type="text"
+                                placeholder="Collection Contract Address (C...)"
+                                value={collectionFeeAddress}
+                                onChange={(e) => setCollectionFeeAddress(e.target.value)}
+                                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            />
+                            <input
+                                type="number"
+                                placeholder="BPS (0–10 000)"
+                                min="0"
+                                max="10000"
+                                value={collectionFeeBps}
+                                onChange={(e) => setCollectionFeeBps(e.target.value)}
+                                className="w-36 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            />
+                            <button
+                                type="button"
+                                disabled={isFeeProcessing || !collectionFeeAddress || !collectionFeeBps}
+                                onClick={handleSetCollectionFee}
+                                className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-brand-700 disabled:opacity-50 shadow-md shadow-brand-200"
+                            >
+                                {isFeeProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                Set Fee
+                            </button>
+                        </div>
+
+                        {feeError && (
+                            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 p-4 text-sm text-red-600 border border-red-100">
+                                <AlertCircle className="h-4 w-4" />
+                                {feeError}
+                            </div>
+                        )}
+
+                        {isFeeLoading ? (
+                            <div className="flex items-center justify-center py-12 text-gray-400">
+                                <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                                <span className="text-sm">Loading collections…</span>
+                            </div>
+                        ) : collectionFeeRows.length === 0 ? (
+                            <div className="flex flex-col items-center py-10 text-center text-gray-400">
+                                <AlertCircle className="mb-2 h-7 w-7 opacity-20" />
+                                <p className="text-sm italic">No collections with fee overrides yet.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-gray-100 bg-gray-50/60">
+                                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Collection Address</th>
+                                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fee (BPS)</th>
+                                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Fee (%)</th>
+                                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-400">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {collectionFeeRows.map((row) => {
+                                            const bps = row.fee_bps;
+                                            const pctDisplay = bps !== null
+                                                ? `${Math.floor(bps / 100)}.${String(bps % 100).padStart(2, "0")}%`
+                                                : "—";
+                                            return (
+                                                <tr key={row.address} className="hover:bg-gray-50/40 transition-colors">
+                                                    <td className="px-4 py-3 font-mono text-xs text-midnight-800 max-w-xs truncate" title={row.address}>
+                                                        {row.address}
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-midnight-800">
+                                                        {bps !== null ? bps : "—"}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs text-gray-600">
+                                                        {pctDisplay}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleClearCollectionFee(row.address)}
+                                                            className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 transition-all"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </section>
 
                     {/* Auction Configuration */}
@@ -1595,7 +1729,7 @@ export default function AdminPage() {
                 actionDescription={confirmConfig.actionDescription}
                 consequences={confirmConfig.consequences}
                 variant={confirmConfig.variant}
-                isProcessing={isModerating || isManagingTokens}
+                isProcessing={isModerating || isManagingTokens || isFeeProcessing}
             />
 
             <AdminTransferWizard

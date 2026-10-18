@@ -9,6 +9,7 @@ Each runbook covers: detection, containment, diagnosis, recovery, and post-incid
 
 | Runbook | Incident Type | Severity |
 |---|---|---|
+| [admin-read-only-diagnostic.md](./admin-read-only-diagnostic.md) | First-step read-only sync/health check for support | LOW |
 | [stalled-ingestion.md](./stalled-ingestion.md) | Indexer stops processing new ledgers | HIGH |
 | [reorganization.md](./reorganization.md) | Stellar chain reorg detected | MEDIUM–HIGH |
 | [database-outage.md](./database-outage.md) | PostgreSQL unavailable | CRITICAL |
