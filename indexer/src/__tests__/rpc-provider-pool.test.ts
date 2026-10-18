@@ -32,6 +32,7 @@ vi.mock('prom-client', async (importOriginal) => {
 import {
   RpcProviderPool,
   buildProviderPoolFromEnv,
+  resolveProviderLabel,
   type ProviderConfig,
 } from '../rpc-provider-pool.js';
 
@@ -218,8 +219,77 @@ describe('RpcProviderPool', () => {
     expect(status).toHaveProperty('activeUrl');
     expect(status.providers).toHaveLength(2);
     expect(status.providers[0]).toHaveProperty('url');
+    expect(status.providers[0]).toHaveProperty('label');
     expect(status.providers[0]).toHaveProperty('inCooldown');
     expect(status.providers[0]).toHaveProperty('chainVerified');
+  });
+
+  // ── resolveProviderLabel (Issue #928) ─────────────────────────────────────
+  //
+  // Confirms that metric labels are always bounded stable identifiers and
+  // never contain raw URLs, credentials, query strings, or other secrets.
+
+  it('uses the explicit label when provided', () => {
+    expect(resolveProviderLabel({ url: 'https://rpc.example.com', label: 'primary' }))
+      .toBe('primary');
+  });
+
+  it('falls back to hostname when no label is provided', () => {
+    expect(resolveProviderLabel({ url: 'https://rpc.example.com/v1' }))
+      .toBe('rpc.example.com');
+  });
+
+  it('strips credentials from the URL when deriving a label', () => {
+    const label = resolveProviderLabel({
+      url: 'https://user:supersecretkey@rpc.example.com/v1?api_key=abc123',
+    });
+    expect(label).toBe('rpc.example.com');
+    expect(label).not.toContain('supersecretkey');
+    expect(label).not.toContain('abc123');
+    expect(label).not.toContain('user:');
+  });
+
+  it('strips query string (which may carry API keys) when deriving a label', () => {
+    const label = resolveProviderLabel({
+      url: 'https://rpc.example.com/endpoint?token=secret&network=testnet',
+    });
+    expect(label).toBe('rpc.example.com');
+    expect(label).not.toContain('token=secret');
+    expect(label).not.toContain('?');
+  });
+
+  it('returns "unknown" for a malformed URL instead of throwing', () => {
+    expect(resolveProviderLabel({ url: 'not-a-valid-url' })).toBe('unknown');
+  });
+
+  it('providerLabel on ProviderHealth matches resolveProviderLabel output', () => {
+    const { pool, providers } = buildPool([
+      { url: 'https://rpc.stellar.org', priority: 0, label: 'mainnet-primary' },
+      { url: 'https://user:key@backup.stellar.org/v1?api=secret', priority: 1 },
+    ]);
+
+    // First provider: explicit label wins
+    expect(providers[0].providerLabel).toBe('mainnet-primary');
+    // Second provider: derived from hostname only — no credentials or query
+    expect(providers[1].providerLabel).toBe('backup.stellar.org');
+    expect(providers[1].providerLabel).not.toContain('key');
+    expect(providers[1].providerLabel).not.toContain('secret');
+    expect(providers[1].providerLabel).not.toContain('api=');
+
+    pool.destroy();
+  });
+
+  it('getStatus label field never exposes credentials or query strings', () => {
+    const { pool } = buildPool([
+      { url: 'https://user:pass@rpc.stellar.org/v1?token=abc', priority: 0 },
+    ]);
+    const status = pool.getStatus();
+    const label = status.providers[0].label;
+    expect(label).toBe('rpc.stellar.org');
+    expect(label).not.toContain('pass');
+    expect(label).not.toContain('abc');
+    expect(label).not.toContain('token=');
+    pool.destroy();
   });
 
   // ── buildProviderPoolFromEnv ───────────────────────────────────────────────
