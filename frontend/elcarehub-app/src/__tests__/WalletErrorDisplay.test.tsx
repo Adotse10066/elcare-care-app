@@ -11,8 +11,16 @@ import {
   WalletErrorDisplay,
   WalletErrorInline,
   IndexerDelayNotice,
+  WrongNetworkBanner,
 } from "@/components/WalletErrorDisplay";
 import type { WalletAdapterError } from "@/lib/wallet-adapter";
+
+jest.mock("@/lib/config", () => ({
+  config: {
+    network: "testnet",
+    networkPassphrase: "Test SDF Network ; September 2015",
+  },
+}));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,8 +70,29 @@ describe("WalletErrorDisplay", () => {
         error={{ kind: "WRONG_NETWORK", message: "wrong", expected: "Test SDF Network", detected: "Public Global" }}
       />
     );
-    expect(screen.getByText(/wrong network/i)).toBeInTheDocument();
-    expect(screen.getByText(/stellar testnet/i)).toBeInTheDocument();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Stellar Testnet");
+    expect(alert).toHaveTextContent("Stellar Mainnet");
+  });
+
+  it("uses the configured expected network when a banner omits it", () => {
+    render(<WrongNetworkBanner detectedPassphrase="Public Global" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Your wallet is connected to Stellar Mainnet. This app requires Stellar Testnet."
+    );
+  });
+
+  it("uses a safe expected-network label without exposing configured passphrases", () => {
+    render(
+      <WrongNetworkBanner
+        expectedPassphrase="SECRET_EXPECTED_CONFIGURATION"
+        detectedPassphrase="SECRET_CURRENT_CONFIGURATION"
+      />
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Configured Stellar network");
+    expect(screen.queryByText(/SECRET_(EXPECTED|CURRENT)_CONFIGURATION/)).not.toBeInTheDocument();
   });
 
   it("calls onSwitchNetwork for WRONG_NETWORK primary action", () => {
@@ -74,7 +103,7 @@ describe("WalletErrorDisplay", () => {
         onSwitchNetwork={onSwitch}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: /refresh connection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /i've switched — check now/i }));
     expect(onSwitch).toHaveBeenCalledTimes(1);
   });
 
@@ -115,6 +144,56 @@ describe("WalletErrorDisplay", () => {
   it("has aria-live=assertive", () => {
     render(<WalletErrorDisplay error={mkError("SIGN_FAILED")} />);
     expect(screen.getByRole("alert")).toHaveAttribute("aria-live", "assertive");
+  });
+});
+
+describe("IndexerDelayNotice transaction actions", () => {
+  const validHash = "a".repeat(64);
+
+  it("shows a trusted explorer link for a valid hash with safe external attributes", () => {
+    render(<IndexerDelayNotice txHash={validHash} />);
+    const link = screen.getByRole("link", { name: /view on explorer/i });
+
+    expect(link).toHaveAttribute("href", `https://stellar.expert/explorer/testnet/tx/${validHash}`);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("hides the explorer link for an invalid hash", () => {
+    render(<IndexerDelayNotice txHash="https://attacker.example" />);
+    expect(screen.queryByRole("link", { name: /view on explorer/i })).not.toBeInTheDocument();
+  });
+
+  it("copies the hash and announces success", async () => {
+    const user = userEvent.setup();
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<IndexerDelayNotice txHash={validHash} />);
+
+    await user.click(screen.getByRole("button", { name: /copy transaction hash/i }));
+
+    expect(writeText).toHaveBeenCalledWith(validHash);
+    expect(screen.getByText("Transaction hash copied.")).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("keeps the hash selectable and announces failure when clipboard is unavailable", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    render(<IndexerDelayNotice txHash={validHash} />);
+
+    await user.click(screen.getByRole("button", { name: /copy transaction hash/i }));
+
+    expect(screen.getByLabelText("Transaction hash")).toHaveClass("select-all");
+    expect(screen.getByText(/select the transaction hash above/i)).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("does not show hash actions when no hash is available", () => {
+    render(<IndexerDelayNotice />);
+    expect(screen.queryByRole("button", { name: /copy transaction hash/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /view on explorer/i })).not.toBeInTheDocument();
   });
 });
 

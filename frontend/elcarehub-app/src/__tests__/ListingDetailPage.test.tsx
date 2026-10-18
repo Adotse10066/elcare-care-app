@@ -70,6 +70,10 @@ jest.mock("@/hooks/useModalA11y", () => ({
 
 jest.mock("@/lib/contract", () => ({
   stroopsToXlm: (s: bigint) => String(Number(s) / 10_000_000),
+  deriveOfferUIStatus: (offer: any, nowMs = Date.now()) =>
+    offer.status === "Pending" && offer.expires_at != null && offer.expires_at * 1000 <= nowMs
+      ? "Expired"
+      : offer.status,
   getListing: jest.fn(),
   getAuction: jest.fn(),
 }));
@@ -400,6 +404,35 @@ describe("OfferPanel — owner view", () => {
     );
     expect(screen.queryByTestId("accept-offer-btn-30")).not.toBeInTheDocument();
     expect(screen.queryByTestId("reject-offer-btn-30")).not.toBeInTheDocument();
+  });
+
+  const statusActionCases: Array<[string, string, Record<string, unknown>, boolean]> = [
+    ["Pending", "Pending", {}, true],
+    ["Accepted", "Accepted", {}, false],
+    ["Rejected", "Rejected", {}, false],
+    ["Withdrawn", "Withdrawn", {}, false],
+    ["Expired", "Pending", { expires_at: 1 }, false],
+  ];
+
+  it.each(statusActionCases)("offers the correct action set for %s status", (expectedStatus, status, overrides, canAct) => {
+    const offerId = 60;
+    render(
+      <OfferPanel
+        {...ownerProps}
+        offers={[makeOffer(offerId, { status, ...overrides })]}
+      />
+    );
+
+    const acceptButton = screen.queryByTestId(`accept-offer-btn-${offerId}`);
+    const rejectButton = screen.queryByTestId(`reject-offer-btn-${offerId}`);
+    if (canAct) {
+      expect(acceptButton).toBeEnabled();
+      expect(rejectButton).toBeEnabled();
+    } else {
+      expect(acceptButton).not.toBeInTheDocument();
+      expect(rejectButton).not.toBeInTheDocument();
+      expect(screen.getByTestId(`offer-status-badge-${offerId}`)).toHaveTextContent(expectedStatus);
+    }
   });
 
   it("calls accept and refreshes on accept click", async () => {

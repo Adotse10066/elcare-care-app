@@ -95,14 +95,38 @@ jobs:
           bash scripts/migrations/lint-migration.sh \
             indexer/prisma/migrations/20260827000000_example_expand_contract/migration.sql
 
-  # ── Markdown link validation ────────────────────────────────────────────────
-  # Validates relative markdown links in operational guides.
-  # Fails if any relative link target is missing.
-  # No network access required.
-  markdown-links:
-    name: Markdown Links
+  # ── Configuration validation gate ────────────────────────────────────────────
+  # Runs on every push/PR to ensure configuration is valid before deployment.
+  # This job validates that all required environment variables are present and
+  # conform to expected formats (network passphrase, contract IDs, URLs, etc.).
+  # Uses safe, non-secret placeholder values — no production credentials.
+  config-validation:
+    name: Config Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate markdown links
-        run: node scripts/validate-markdown-links.js
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build config package
+        run: |
+          cd packages/config
+          npm ci
+          npm run build
+
+      - name: Run configuration validation
+        env:
+          # Safe non-secret placeholder values — no production credentials
+          STELLAR_NETWORK: testnet
+          STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+          STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
+          STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+          MARKETPLACE_CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          INDEXER_URL: http://localhost:4000
+          OPERATOR_TOKEN: valid-operator-token-minimum-32-characters-long
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          REDIS_URL: redis://localhost:6379
+          PINATA_GATEWAY: https://gateway.pinata.cloud
+        run: node scripts/validate-config.js

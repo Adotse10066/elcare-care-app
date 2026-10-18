@@ -32,6 +32,7 @@ import {
   Clock,
   HelpCircle,
   ExternalLink,
+  Copy,
   X,
   CheckCircle2,
   List,
@@ -43,6 +44,8 @@ import {
   getTargetNetworkLabel,
   type WalletProviderName,
 } from "@/lib/networkStatus";
+import { config } from "@/lib/config";
+import { getTxExplorerUrl } from "@/hooks/useTxToast";
 
 // ── Per-kind display config ──────────────────────────────────────────────────
 
@@ -89,15 +92,14 @@ function getDisplayConfig(
       };
 
     case "WRONG_NETWORK": {
-      const expected = error.expected ?? "the required network";
-      const detected = error.detected;
-      const detectedLabel = detected
-        ? `"${networkShortLabel(detected)}"`
+      const expected = getTargetNetworkLabel(error.expected || config.networkPassphrase);
+      const detected = error.detected
+        ? getTargetNetworkLabel(error.detected)
         : "a different network";
       return {
         icon: <ArrowRightLeft size={20} aria-hidden="true" />,
         title: "Wrong Network",
-        explanation: `Your wallet is connected to ${detectedLabel}. This app requires "${networkShortLabel(expected)}".`,
+        explanation: `Your wallet is connected to ${detected}. This app requires ${expected}.`,
         instruction:
           "Follow the steps below to switch networks in your wallet, then return to this page.",
         primaryLabel: "Refresh Connection",
@@ -168,15 +170,6 @@ function getDisplayConfig(
         severity: "error",
       };
   }
-}
-
-function networkShortLabel(passphrase: string): string {
-  if (!passphrase) return "Unknown";
-  if (passphrase.toLowerCase().includes("test")) return "Stellar Testnet";
-  if (passphrase.toLowerCase().includes("public")) return "Stellar Mainnet";
-  return passphrase.length > 30
-    ? passphrase.slice(0, 28) + "…"
-    : passphrase;
 }
 
 // ── Severity → Tailwind class maps ───────────────────────────────────────────
@@ -514,7 +507,7 @@ export function WrongNetworkBanner({
   const error: WalletAdapterError = {
     kind: "WRONG_NETWORK",
     message: `Wrong network detected.`,
-    expected: expectedPassphrase ?? "",
+    expected: expectedPassphrase || config.networkPassphrase,
     detected: detectedPassphrase ?? null,
   };
 
@@ -585,6 +578,21 @@ export function IndexerDelayNotice({
   onRefresh?: () => void;
   className?: string;
 }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const explorerUrl = getTxExplorerUrl(txHash);
+
+  const handleCopy = async () => {
+    if (!txHash) return;
+    try {
+      const clipboard = navigator.clipboard;
+      if (!clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await clipboard.writeText(txHash);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  };
+
   return (
     <div
       role="status"
@@ -604,9 +612,39 @@ export function IndexerDelayNotice({
           picked it up yet. This usually resolves within 30 seconds.
         </p>
         {txHash && (
-          <p className="mt-1 font-mono text-[10px] text-amber-700 break-all">
-            TX: {txHash}
-          </p>
+          <div className="mt-2 space-y-1.5">
+            <p className="font-mono text-[10px] text-amber-700 break-all">
+              TX: <code aria-label="Transaction hash" className="select-all">{txHash}</code>
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCopy}
+                aria-label="Copy transaction hash"
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 hover:text-amber-950"
+              >
+                <Copy size={12} aria-hidden="true" />
+                Copy hash
+              </button>
+              {explorerUrl && (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 hover:text-amber-950"
+                >
+                  View on explorer <ExternalLink size={11} aria-hidden="true" />
+                </a>
+              )}
+            </div>
+            {copyState !== "idle" && (
+              <p aria-live="polite" aria-atomic="true" className="text-xs text-amber-800">
+                {copyState === "copied"
+                  ? "Transaction hash copied."
+                  : "Could not copy. Select the transaction hash above to copy it manually."}
+              </p>
+            )}
+          </div>
         )}
         {onRefresh && (
           <button

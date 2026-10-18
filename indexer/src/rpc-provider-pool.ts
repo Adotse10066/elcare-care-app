@@ -26,36 +26,67 @@ import { rpc } from '@stellar/stellar-sdk';
 import { logger } from './logger.js';
 import client from 'prom-client';
 
+// ── Stable provider label (Issue #928) ────────────────────────────────────────
+//
+// Metric labels must never contain raw URLs, credentials, or unbounded strings.
+// `resolveProviderLabel` derives a short, stable identifier from the optional
+// human-readable `label` field.  When no label is supplied it falls back to
+// just the hostname extracted from the URL (strips scheme, credentials, path,
+// and query string).  This keeps cardinality bounded and secrets out of labels.
+//
+// Examples:
+//   label="primary"                  → "primary"
+//   label=undefined, url="https://user:pass@rpc.example.com/v1?key=abc"
+//                                    → "rpc.example.com"
+
+export function resolveProviderLabel(config: Pick<ProviderConfig, 'url' | 'label'>): string {
+  if (config.label && config.label.trim() !== '') {
+    // Use the human-readable label as-is — it is always operator-supplied and
+    // bounded by convention (e.g. "primary", "fallback", "regional-eu").
+    return config.label.trim();
+  }
+  // Extract just the hostname; discard scheme, credentials, path, and query.
+  try {
+    return new URL(config.url).hostname;
+  } catch {
+    // URL is malformed — use a fixed placeholder so labels remain bounded.
+    return 'unknown';
+  }
+}
+
 // ── Prometheus metrics ─────────────────────────────────────────────────────────
+//
+// All labels use the stable provider identifier returned by resolveProviderLabel,
+// never raw URLs or credential-bearing strings (Issue #928).
 
 export const rpcProviderActiveGauge = new client.Gauge({
   name: 'indexer_rpc_provider_active',
   help: 'Index of the currently active RPC provider (0=primary)',
-  labelNames: ['url'],
+  labelNames: ['provider'],
 });
 
 export const rpcProviderFailoversTotal = new client.Counter({
   name: 'indexer_rpc_provider_failovers_total',
   help: 'Total RPC provider failovers',
-  labelNames: ['from_url', 'to_url'],
+  labelNames: ['from', 'to'],
 });
 
 export const rpcProviderRecoveriesTotal = new client.Counter({
   name: 'indexer_rpc_provider_recoveries_total',
   help: 'Total recoveries back to the primary provider',
-  labelNames: ['url'],
+  labelNames: ['provider'],
 });
 
 export const rpcProviderErrorsTotal = new client.Counter({
   name: 'indexer_rpc_provider_errors_total',
   help: 'Total RPC errors per provider',
-  labelNames: ['url'],
+  labelNames: ['provider'],
 });
 
 export const rpcProviderLatencyHistogram = new client.Histogram({
   name: 'indexer_rpc_provider_latency_seconds',
   help: 'RPC call latency per provider',
-  labelNames: ['url'],
+  labelNames: ['provider'],
   buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
 });
 
@@ -90,6 +121,8 @@ const MAX_CONSECUTIVE_ERRORS = parseInt(
 
 export interface ProviderHealth {
   config: ProviderConfig;
+  /** Stable, bounded metric label derived via resolveProviderLabel (Issue #928). */
+  providerLabel: string;
   server: rpc.Server;
   consecutiveErrors: number;
   totalErrors: number;
@@ -135,6 +168,7 @@ export class RpcProviderPool {
 
     this.providers = sorted.map((cfg) => ({
       config: cfg,
+      providerLabel: resolveProviderLabel(cfg),
       server: new rpc.Server(cfg.url),
       consecutiveErrors: 0,
       totalErrors: 0,
@@ -196,14 +230,14 @@ export class RpcProviderPool {
         const latencyMs = Date.now() - start;
 
         this.recordSuccess(health, latencyMs);
-        rpcProviderLatencyHistogram.labels(health.config.url).observe(latencyMs / 1000);
+        rpcProviderLatencyHistogram.labels(health.providerLabel).observe(latencyMs / 1000);
 
         return result;
       } catch (err) {
         lastErr = err;
         const latencyMs = Date.now() - start;
-        rpcProviderLatencyHistogram.labels(health.config.url).observe(latencyMs / 1000);
-        rpcProviderErrorsTotal.labels(health.config.url).inc();
+        rpcProviderLatencyHistogram.labels(health.providerLabel).observe(latencyMs / 1000);
+        rpcProviderErrorsTotal.labels(health.providerLabel).inc();
 
         this.recordError(health);
 
@@ -223,6 +257,7 @@ export class RpcProviderPool {
     expectedNetworkPassphrase: string | null;
     providers: Array<{
       url: string;
+      label: string;
       priority: number;
       consecutiveErrors: number;
       inCooldown: boolean;
@@ -239,6 +274,7 @@ export class RpcProviderPool {
       expectedNetworkPassphrase: this.expectedNetworkPassphrase,
       providers: this.providers.map((p) => ({
         url: p.config.url,
+        label: p.providerLabel,
         priority: p.config.priority,
         consecutiveErrors: p.consecutiveErrors,
         inCooldown: this.isInCooldown(p),
@@ -353,15 +389,15 @@ export class RpcProviderPool {
     this.activeIndex = this.providers.indexOf(nextHealth);
 
     rpcProviderFailoversTotal
-      .labels(fromHealth.config.url, nextHealth.config.url)
+      .labels(fromHealth.providerLabel, nextHealth.providerLabel)
       .inc();
 
-    rpcProviderActiveGauge.labels(fromHealth.config.url).set(0);
-    rpcProviderActiveGauge.labels(nextHealth.config.url).set(1);
+    rpcProviderActiveGauge.labels(fromHealth.providerLabel).set(0);
+    rpcProviderActiveGauge.labels(nextHealth.providerLabel).set(1);
 
     logger.warn('[RpcProviderPool] Failover triggered', {
-      from: fromHealth.config.url,
-      to: nextHealth.config.url,
+      from: fromHealth.providerLabel,
+      to: nextHealth.providerLabel,
       prevIndex,
       newIndex: this.activeIndex,
     });
@@ -395,17 +431,17 @@ export class RpcProviderPool {
       }
 
       // Primary is healthy and chain-compatible — recover
-      const prevUrl = this.providers[this.activeIndex].config.url;
+      const prevLabel = this.providers[this.activeIndex].providerLabel;
       this.activeIndex = 0;
       primary.consecutiveErrors = 0;
       primary.cooldownSince = null;
 
-      rpcProviderRecoveriesTotal.labels(primary.config.url).inc();
-      rpcProviderActiveGauge.labels(prevUrl).set(0);
-      rpcProviderActiveGauge.labels(primary.config.url).set(1);
+      rpcProviderRecoveriesTotal.labels(primary.providerLabel).inc();
+      rpcProviderActiveGauge.labels(prevLabel).set(0);
+      rpcProviderActiveGauge.labels(primary.providerLabel).set(1);
 
       logger.info('[RpcProviderPool] Recovered to primary', {
-        url: primary.config.url,
+        provider: primary.providerLabel,
         ledger,
       });
     } catch (err) {

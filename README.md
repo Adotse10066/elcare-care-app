@@ -292,17 +292,21 @@ Open **http://localhost:3000** in your browser.
 
 ### Running all tests
 
+Run these from the **repository root**.
+
 ```bash
-# Rust contract tests (no live network)
+# Rust contract tests — no live network, wallet, or database required
 cargo test
 
-# Frontend unit tests
+# Frontend unit tests (Jest) — no live network, wallet, or database required
+# Runs all tests under frontend/elcarehub-app/src/__tests__/ via `npm test --prefix frontend/elcarehub-app`
 npm run test:frontend
 
-# Indexer unit tests
+# Indexer unit tests — no live network required
 npm run test:indexer
 
-# Frontend E2E (Playwright — requires dev server in mock mode)
+# Frontend E2E tests (Playwright) — requires the dev server in mock-chain mode
+# See frontend/elcarehub-app/README.md → Testing for prerequisite details
 npm run test:e2e
 ```
 

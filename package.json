@@ -27,6 +27,9 @@
     "ttl:keeper": "tsx scripts/ttl-keeper.ts",
     "check-event-schemas": "node scripts/check-event-schemas.mjs"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "workspaces": [
     "packages/config",
     "packages/contract-abi",

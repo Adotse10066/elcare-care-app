@@ -341,5 +341,5 @@ export function getTargetNetworkLabel(
 ): string {
   if (expectedPassphrase.toLowerCase().includes("test")) return "Stellar Testnet";
   if (expectedPassphrase.toLowerCase().includes("public")) return "Stellar Mainnet";
-  return expectedPassphrase.slice(0, 40) + (expectedPassphrase.length > 40 ? "…" : "");
+  return "Configured Stellar network";
 }
