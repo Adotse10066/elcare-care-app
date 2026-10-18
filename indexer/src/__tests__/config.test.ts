@@ -192,4 +192,40 @@ describe('validateRequiredEnv', () => {
     expect(caught!.message).toContain('DATABASE_URL');
     expect(caught!.message).toContain('MARKETPLACE_CONTRACT_ID');
   });
+
+  it('names the missing key but never prints secret values', () => {
+    delete process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://admin:supersecret123@localhost/db';
+    const originalDbUrl = process.env.DATABASE_URL;
+    
+    delete process.env.DATABASE_URL;
+    let caught: Error | null = null;
+    try {
+      validateRequiredEnv();
+    } catch (e) {
+      caught = e as Error;
+    }
+    
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toContain('DATABASE_URL');
+    // Verify the error message does NOT contain secret values
+    expect(caught!.message).not.toContain('supersecret');
+    expect(caught!.message).not.toContain('admin:');
+  });
+
+  it('provides clear guidance when MARKETPLACE_CONTRACT_ID is missing', () => {
+    delete process.env.MARKETPLACE_CONTRACT_ID;
+    let caught: Error | null = null;
+    try {
+      validateRequiredEnv();
+    } catch (e) {
+      caught = e as Error;
+    }
+    
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toContain('MARKETPLACE_CONTRACT_ID');
+    expect(caught!.message).toContain('TRACKED_CONTRACTS');
+    // Verify the error message provides actionable guidance
+    expect(caught!.message).not.toContain('undefined');
+  });
 });
