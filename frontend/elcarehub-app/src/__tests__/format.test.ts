@@ -136,6 +136,17 @@ describe("formatDate — DST transition (America/New_York spring 2024)", () => {
 // ── formatLedgerTime ──────────────────────────────────────────────────────────
 
 describe("formatLedgerTime", () => {
+  it("formats a fixed ledger timestamp with an explicit UTC zone", () => {
+    const result = formatLedgerTime(MS_2024_01_15, {
+      locale: "en-US",
+      timeZone: "UTC",
+    });
+
+    expect(result).toContain("Jan 15, 2024");
+    expect(result).toContain("12:00 PM");
+    expect(result).toContain("UTC");
+  });
+
   it("includes a timezone abbreviation (en-US / UTC)", () => {
     const result = formatLedgerTime(MS_2024_01_15, {
       locale: "en-US",

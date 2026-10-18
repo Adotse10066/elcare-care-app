@@ -14,6 +14,7 @@ import {
   finalizeAuction,
   cancelAuction,
   refundLosingBid,
+  getMinBidIncrement,
   Auction,
 } from "@/lib/contract";
 import { fetchAuctions } from "@/lib/indexer";
@@ -28,6 +29,23 @@ import {
   generatePendingId,
   type ConfirmedSnapshot,
 } from "./useReconciliation";
+
+/** Reads the contract's global bid increment; the fallback matches contract default. */
+export function useMinBidIncrement() {
+  const [minimumIncrement, setMinimumIncrement] = useState(1_000_000n);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMinBidIncrement().then((increment) => {
+      if (!cancelled) setMinimumIncrement(increment);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return minimumIncrement;
+}
 
 // ── useAuctions ──────────────────────────────────────────────
 
