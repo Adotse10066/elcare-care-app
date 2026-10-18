@@ -94,3 +94,15 @@ jobs:
         run: |
           bash scripts/migrations/lint-migration.sh \
             indexer/prisma/migrations/20260827000000_example_expand_contract/migration.sql
+
+  # ── Markdown link validation ────────────────────────────────────────────────
+  # Validates relative markdown links in operational guides.
+  # Fails if any relative link target is missing.
+  # No network access required.
+  markdown-links:
+    name: Markdown Links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate markdown links
+        run: node scripts/validate-markdown-links.js
