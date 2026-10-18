@@ -21,6 +21,13 @@ const mockWalletContext = {
   networkPassphrase: null,
 };
 
+jest.mock('@/lib/config', () => ({
+  config: {
+    network: 'testnet',
+    networkPassphrase: 'Test SDF Network ; September 2015',
+  },
+}));
+
 jest.mock('@/context/WalletContext', () => ({
   useWalletContext: () => mockWalletContext,
 }));
@@ -54,6 +61,7 @@ describe('WalletGuard', () => {
       </WalletGuard>
     );
     expect(screen.getByTestId('child')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('renders the default fallback (Connect Wallet) when disconnected', () => {

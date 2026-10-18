@@ -41,6 +41,7 @@ jest.mock('@/lib/errors', () => {
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 import { useTxToast, getTxExplorerUrl } from '@/hooks/useTxToast';
+import { config } from '@/lib/config';
 import { isUserRejectionError } from '@/lib/errors';
 import { ToastProvider, useToast } from '@/components/ToastProvider';
 
@@ -91,9 +92,20 @@ function renderHarness(
 // ── getTxExplorerUrl ──────────────────────────────────────────────────────────
 
 describe('getTxExplorerUrl', () => {
+  const validHash = 'a'.repeat(64);
+
+  beforeEach(() => {
+    Object.defineProperty(config, 'network', { configurable: true, value: 'testnet' });
+  });
+
   it('returns a testnet URL for the given hash', () => {
-    const url = getTxExplorerUrl('abc123');
-    expect(url).toBe('https://stellar.expert/explorer/testnet/tx/abc123');
+    const url = getTxExplorerUrl(validHash);
+    expect(url).toBe(`https://stellar.expert/explorer/testnet/tx/${validHash}`);
+  });
+
+  it('returns a mainnet URL when the configured network is mainnet', () => {
+    Object.defineProperty(config, 'network', { configurable: true, value: 'mainnet' });
+    expect(getTxExplorerUrl(validHash)).toBe(`https://stellar.expert/explorer/mainnet/tx/${validHash}`);
   });
 
   it('returns null when hash is null', () => {
@@ -106,6 +118,10 @@ describe('getTxExplorerUrl', () => {
 
   it('returns null when hash is an empty string', () => {
     expect(getTxExplorerUrl('')).toBeNull();
+  });
+
+  it('returns null when the hash is not a valid Stellar transaction hash', () => {
+    expect(getTxExplorerUrl('https://attacker.example')).toBeNull();
   });
 });
 
@@ -183,7 +199,7 @@ describe('useTxToast — success lifecycle', () => {
 
   it('includes explorer URL in the success toast when the result has a hash', async () => {
     const user = userEvent.setup();
-    const txHash = 'deadbeef1234567890abcdef1234567890abcdef1234567890abcdef12345678';
+    const txHash = 'a'.repeat(64);
     const successFn = jest.fn().mockResolvedValue({ hash: txHash });
 
     renderHarness(successFn, { action: 'Bid' });
