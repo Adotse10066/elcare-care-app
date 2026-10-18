@@ -31,14 +31,19 @@ import { getReadableErrorMessage } from "@/lib/errors";
 import { categorizePageError, PageStateError } from "@/lib/pageState";
 import { useWalletContext } from "@/context/WalletContext";
 import { usePlaceBid } from "@/hooks/usePlaceBid";
-import { useFinalizeAuction } from "@/hooks/useAuctions";
+import { useFinalizeAuction, useMinBidIncrement } from "@/hooks/useAuctions";
 import { useServerClock } from "@/hooks/useServerClock";
 import { GuardButton } from "@/components/WalletGuard";
 import { ResourceState } from "@/components/PageStates";
 import { AuctionManagementPanel } from "@/components/AuctionManagementPanel";
 import { config } from "@/lib/config";
 import { getTokenConfigByAddress, getNativeTokenConfig } from "@/config/tokens";
-import { validateAmountInput, baseToDisplay } from "@/lib/amount";
+import {
+  calculateMinimumNextBid,
+  validateAmountInput,
+  baseToDisplay,
+} from "@/lib/amount";
+import { formatLedgerTime } from "@/lib/format";
 import {
   ArrowLeft,
   Clock,
@@ -661,6 +666,7 @@ export default function AuctionDetailPage() {
   const { bid, isBidding, error: bidError } = usePlaceBid(publicKey);
   const { finalize, isFinalizing, error: finalizeError } =
     useFinalizeAuction(publicKey);
+  const minimumIncrement = useMinBidIncrement();
 
   // ── Data loader ──────────────────────────────────────────
 
@@ -695,7 +701,7 @@ export default function AuctionDetailPage() {
   // user-triggered refresh or SSE event.
   const [, forceTick] = useState(0);
   useEffect(() => {
-    const tickId = setInterval(() => forceTick((n) => n + 1), 5_000);
+    const tickId = setInterval(() => forceTick((n) => n + 1), 1_000);
     return () => clearInterval(tickId);
   }, []);
 
@@ -794,8 +800,11 @@ export default function AuctionDetailPage() {
     // — rejects malformed input, excess decimal precision, and below-minimum
     // bids in one pass, mirroring the shared BiddingPanel component.
     const bidToken = getTokenConfigByAddress(auction.token) ?? getNativeTokenConfig();
-    const minimumNextBidBase =
-      auction.highest_bid > 0n ? auction.highest_bid + 1n : auction.reserve_price;
+    const minimumNextBidBase = calculateMinimumNextBid(
+      auction.highest_bid,
+      auction.reserve_price,
+      minimumIncrement
+    );
     const result = validateAmountInput(bidAmountXlm, bidToken, minimumNextBidBase);
     if (!result.valid || result.baseUnits === null) {
       setBidValidationError(result.message);
@@ -863,6 +872,17 @@ export default function AuctionDetailPage() {
   const imageUrl = metadata?.image ? cidToGatewayUrl(metadata.image) : null;
   const highestBidXlm = auction ? stroopsToXlm(auction.highest_bid) : "0";
   const reserveXlm = auction ? stroopsToXlm(auction.reserve_price) : "0";
+  const minimumNextBidBase = auction
+    ? calculateMinimumNextBid(
+        auction.highest_bid,
+        auction.reserve_price,
+        minimumIncrement
+      )
+    : 0n;
+  const bidToken = auction
+    ? getTokenConfigByAddress(auction.token) ?? getNativeTokenConfig()
+    : getNativeTokenConfig();
+  const minimumNextBidDisplay = baseToDisplay(minimumNextBidBase, bidToken);
 
   // ── Loading skeleton ──────────────────────────────────────
 
@@ -1091,19 +1111,23 @@ export default function AuctionDetailPage() {
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    min="0"
+                    min={minimumNextBidDisplay}
                     step="0.0000001"
-                    placeholder={`Min. ${reserveXlm} XLM`}
+                    placeholder={`Min. ${minimumNextBidDisplay} ${bidToken.symbol}`}
                     value={bidAmountXlm}
                     onChange={(e) => {
-                      setBidAmountXlm(e.target.value);
-                      setBidValidationError(null);
+                      const value = e.target.value;
+                      setBidAmountXlm(value);
+                      const result = value
+                        ? validateAmountInput(value, bidToken, minimumNextBidBase)
+                        : null;
+                      setBidValidationError(result && !result.valid ? result.message : null);
                     }}
                     className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                   <GuardButton
                     onClick={handleBid}
-                    disabled={isBidding || !bidAmountXlm}
+                    disabled={isBidding || !bidAmountXlm || !!bidValidationError}
                     className="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-all"
                   >
                     {isBidding ? (
@@ -1118,12 +1142,21 @@ export default function AuctionDetailPage() {
                 {(bidValidationError || bidError) && (
                   <p className="text-xs text-red-500">{bidValidationError || bidError}</p>
                 )}
+                <p data-testid="minimum-next-bid" className="text-xs text-gray-500">
+                  Minimum next bid: {minimumNextBidDisplay} {bidToken.symbol}
+                </p>
                 {bidSuccess && (
                   <p className="flex items-center gap-1 text-xs text-green-600">
                     <CheckCircle2 size={13} /> Bid placed successfully!
                   </p>
                 )}
               </div>
+            )}
+
+            {isActive && isExpired && (
+              <p role="status" className="rounded-xl bg-gray-100 px-4 py-3 text-sm text-gray-600">
+                Bidding is closed because this auction has ended.
+              </p>
             )}
 
             {/* Finalize CTA — available to any user once the auction has expired. */}
@@ -1200,7 +1233,7 @@ export default function AuctionDetailPage() {
                   {
                     icon: Calendar,
                     label: "End Time",
-                    value: new Date(liveEndTime * 1000).toLocaleString(),
+                    value: formatLedgerTime(liveEndTime * 1000),
                   },
                 ] as const
               ).map(({ icon: Icon, label, value }) => (
