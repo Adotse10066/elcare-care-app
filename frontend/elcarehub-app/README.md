@@ -161,6 +161,25 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
+### Network configuration
+
+By default, the frontend targets **Stellar testnet** using the following configuration:
+
+| Variable | Default Value |
+|----------|---------------|
+| `NEXT_PUBLIC_STELLAR_NETWORK` | `testnet` |
+| `NEXT_PUBLIC_STELLAR_RPC_URL` | `https://soroban-testnet.stellar.org` |
+| `NEXT_PUBLIC_STELLAR_HORIZON_URL` | `https://horizon-testnet.stellar.org` |
+| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
+
+To run against **mainnet**, you must explicitly configure:
+
+1. `NEXT_PUBLIC_STELLAR_NETWORK=mainnet`
+2. Mainnet contract IDs (`NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_LAUNCHPAD_CONTRACT_ID`)
+3. Mainnet RPC endpoints
+
+Mainnet configuration requires intentional deployment values and is not suitable for local development without proper setup.
+
 ---
 
 ## Environment Variables
@@ -177,10 +196,10 @@ cp .env.example .env.local
 |----------|----------|-------------|
 | `NEXT_PUBLIC_CONTRACT_ID` | ✅ | Deployed Soroban marketplace contract address |
 | `NEXT_PUBLIC_LAUNCHPAD_CONTRACT_ID` | ✅ | Deployed launchpad factory address |
-| `NEXT_PUBLIC_STELLAR_NETWORK` | ✅ | `testnet` or `mainnet` |
-| `NEXT_PUBLIC_STELLAR_RPC_URL` | ✅ | Soroban RPC endpoint |
-| `NEXT_PUBLIC_STELLAR_HORIZON_URL` | ✅ | Horizon REST API endpoint |
-| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | ✅ | Network passphrase |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | ✅ | **Target network: `testnet` (default) or `mainnet`.** Local development uses `testnet` by default. |
+| `NEXT_PUBLIC_STELLAR_RPC_URL` | ✅ | Soroban RPC endpoint (default: `https://soroban-testnet.stellar.org`) |
+| `NEXT_PUBLIC_STELLAR_HORIZON_URL` | ✅ | Horizon REST API endpoint (default: `https://horizon-testnet.stellar.org`) |
+| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | ✅ | Network passphrase (default: `Test SDF Network ; September 2015` for testnet) |
 | `NEXT_PUBLIC_INDEXER_URL` | ✅ | Indexer API base URL |
 | `NEXT_PUBLIC_PINATA_GATEWAY` | ✅ | Pinata IPFS gateway URL |
 | `PINATA_JWT` | ✅ | Pinata JWT — server-side only, never commit |

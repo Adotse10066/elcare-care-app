@@ -287,6 +287,8 @@ fn test_my_new_behaviour_unauthorized() {
 
 Property-based tests go in `contracts/soroban-marketplace/src/invariant_tests.rs` using the `proptest!` macro.
 
+**Event schema changes**: If your PR modifies event payloads (contract event topics, struct fields, or indexer parsing), follow the procedure in `CONTRIBUTING-SCHEMA-CHANGES.md` first. This ensures backward compatibility and proper indexer integration.
+
 ### E2E tests
 
 Add `.spec.ts` files under `frontend/elcarehub-app/tests/e2e/`. Use `data-testid` attributes to locate elements (they are stable across class-name refactors). Keep tests resilient: prefer `waitForSelector` over fixed `waitForTimeout`. Mock-chain fixtures are controlled via `NEXT_PUBLIC_E2E_MOCK_CHAIN=true`.
@@ -369,7 +371,7 @@ Use when your PR modifies contracts, financial calculations, wallet signing, par
 - Arithmetic (settlement amounts, royalties, fees)
 - Signature validation or replay protection
 - Database migrations
-- Event schema changes
+- Event schema changes (see also `CONTRIBUTING-SCHEMA-CHANGES.md` for detailed schema change procedure)
 
 The high-risk template includes checklists for:
 - Authorization & access control
