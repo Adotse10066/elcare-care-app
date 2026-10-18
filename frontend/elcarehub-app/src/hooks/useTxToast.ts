@@ -29,6 +29,7 @@ import {
   extractTxHash,
   classifyTxError,
 } from "./useTxLifecycle";
+import { isValidTxHash } from "@/lib/txLookup";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ export interface UseTxToastResult {
  * Falls back gracefully when hash is null/undefined.
  */
 export function getTxExplorerUrl(txHash: string | null | undefined): string | null {
-  if (!txHash) return null;
+  if (!txHash || !isValidTxHash(txHash)) return null;
   const network = config.network === "mainnet" ? "mainnet" : "testnet";
   return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
 }

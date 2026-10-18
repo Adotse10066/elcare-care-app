@@ -173,11 +173,11 @@ describe("getTargetNetworkLabel", () => {
     expect(getTargetNetworkLabel()).toBe("Stellar Testnet");
   });
 
-  it("truncates long unknown passphrases", () => {
+  it("does not expose unknown passphrases in user-facing network labels", () => {
     const long = "Custom Network X ; " + "A".repeat(60);
     const label = getTargetNetworkLabel(long);
-    expect(label.length).toBeLessThanOrEqual(45);
-    expect(label.endsWith("…")).toBe(true);
+    expect(label).toBe("Configured Stellar network");
+    expect(label).not.toContain(long);
   });
 });
 
