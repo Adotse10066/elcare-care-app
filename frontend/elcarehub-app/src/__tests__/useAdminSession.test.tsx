@@ -55,4 +55,44 @@ describe("useAdminSession", () => {
     });
     expect(result.current.isAuthenticated).toBe(false);
   });
+
+  it("should set isExpired to true after session timeout", async () => {
+    const { result } = renderHook(() => useAdminSession());
+    await act(async () => {
+      await result.current.authenticate();
+    });
+    expect(result.current.isExpired).toBe(false);
+
+    act(() => {
+      jest.advanceTimersByTime(16 * 60 * 1000);
+    });
+
+    act(() => {
+      result.current.checkSession();
+    });
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.isExpired).toBe(true);
+  });
+
+  it("should clear isExpired on re-authentication", async () => {
+    const { result } = renderHook(() => useAdminSession());
+    await act(async () => {
+      await result.current.authenticate();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(16 * 60 * 1000);
+    });
+    act(() => {
+      result.current.checkSession();
+    });
+    expect(result.current.isExpired).toBe(true);
+
+    await act(async () => {
+      await result.current.authenticate();
+    });
+    expect(result.current.isExpired).toBe(false);
+    expect(result.current.isAuthenticated).toBe(true);
+  });
 });

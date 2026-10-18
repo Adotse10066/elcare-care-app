@@ -19,6 +19,8 @@ function getFocusable(dialog: HTMLElement): HTMLElement[] {
 export function useModalA11y(isOpen: boolean, onClose: () => void) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const titleId = useId();
   const descriptionId = useId();
 
@@ -35,7 +37,7 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -51,6 +53,7 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
       const active = document.activeElement as HTMLElement;
 
       // If focus somehow landed outside the trap (or on a control that just
@@ -74,9 +77,11 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus?.();
+      const previousFocus = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return { dialogRef, titleId, descriptionId };
 }

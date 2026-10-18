@@ -10633,6 +10633,84 @@ fn test_duplicate_recipient_panics() {
     );
 }
 
+// ── Duplicate-recipient royalty split policy tests ───────────────────────────
+//
+// validate_recipients explicitly rejects a recipient list that contains the
+// same address more than once (DuplicateRecipient #44).  These tests prove
+// the contract's documented policy: each address may appear at most once so
+// that the payout logic cannot accidentally pay a recipient twice beyond their
+// stated split.
+
+/// Two entries with the same recipient address are rejected at creation time
+/// with DuplicateRecipient (#44), regardless of their combined basis-point
+/// total.  This proves no recipient can receive a payment that exceeds their
+/// explicitly declared share.
+#[test]
+#[should_panic(expected = "Error(Contract, #44)")]
+fn test_duplicate_recipient_rejected_at_create_listing() {
+    let (env, client, admin, _, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    // Two entries at 5 000 bps each would sum to exactly 10 000 bps — a valid
+    // total — but the address is the same, which is explicitly forbidden.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+    ];
+    client.create_listing(
+        &admin, &5_000_000_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
+}
+
+/// Confirms that distinct recipient addresses with the same combined total
+/// (10 000 bps) are accepted — the duplicate check is address-based, not
+/// percentage-based.  This acts as the positive-path companion to the
+/// rejection test above.
+#[test]
+fn test_distinct_recipients_same_bps_total_accepted() {
+    let (env, client, admin, _, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    let collaborator = Address::generate(&env);
+    // Two *different* addresses, each 5 000 bps — total 10 000, no duplicate.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+        crate::types::Recipient { address: collaborator.clone(), percentage: 5_000 },
+    ];
+    let listing_id = client.create_listing(
+        &admin, &10_000_000_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
+    assert_eq!(listing_id, 1u64, "listing with distinct 5000/5000 split must be created");
+    assert_eq!(client.get_listing(&listing_id).recipients.len(), 2);
+}
+
+/// When two entries share a recipient address the total basis points cannot
+/// exceed 10 000 via the duplicate path — the DuplicateRecipient guard fires
+/// before the RoyaltyExceedsLimit guard could.  This confirms the guard order
+/// so the error is always the precise, named DuplicateRecipient code.
+#[test]
+#[should_panic(expected = "Error(Contract, #44)")]
+fn test_duplicate_recipient_error_code_is_44_not_royalty_limit() {
+    let (env, client, admin, _, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    // Duplicate with total > 10 000: duplicate guard (#44) fires before the
+    // limit guard (#26) because address uniqueness is checked first.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 6_000 },
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+    ];
+    client.create_listing(
+        &admin, &5_000_000_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
+}
+
 #[test]
 #[should_panic(expected = "Error(Contract, #2)")]
 fn test_protocol_fee_above_1000_panics() {
@@ -12066,4 +12144,307 @@ fn test_batch_create_valid_emits_one_event_per_item() {
         false
     }).count();
     assert_eq!(created_count, 2, "one listing_created event per valid item");
+}
+
+// ══════════════════════════════════════════════════════════════
+// Auction end-time boundary tests (Issue acceptance criteria)
+//
+// Uses deterministic ledger timestamps to pin the exact inclusive/exclusive
+// boundary of finalize_auction.  The contract requires
+//   env.ledger().timestamp() > auction.end_time
+// so timestamp == end_time is NOT sufficient (exclusive upper boundary).
+// ══════════════════════════════════════════════════════════════
+
+/// Timestamp exactly equal to end_time must be rejected with AuctionNotEnded
+/// (#29). This is the "at deadline" case that confirms the boundary is
+/// exclusive: the auction has not officially ended while the clock reads the
+/// deadline exactly.
+#[test]
+#[should_panic(expected = "Error(Contract, #29)")]
+fn test_finalize_auction_at_exact_deadline_rejected() {
+    let (env, client, artist, buyer, token_id, _cid, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    let duration = 3_600u64;
+    let start = env.ledger().timestamp();
+    let aid = client.create_auction(
+        &artist, &token_id, &collection_id, &1u64,
+        &1_000_000_i128, &duration, &valid_recipients(&env, &artist),
+    );
+    // Place a bid so the auction would otherwise finalize with a winner.
+    client.place_bid(&buyer, &aid, &2_000_000_i128);
+    // Advance to EXACTLY end_time — the exclusive boundary means this must fail.
+    env.ledger().set_timestamp(start + duration);
+    client.finalize_auction(&buyer, &aid);
+}
+
+/// One second past end_time (timestamp = end_time + 1) must succeed.
+/// This is the "just after" case and confirms the boundary crossing works.
+/// The winning bidder gets the NFT and the auction reaches Finalized status.
+#[test]
+fn test_finalize_auction_one_second_past_deadline_succeeds() {
+    let (env, client, artist, buyer, token_id, _cid, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    let duration = 3_600u64;
+    let start = env.ledger().timestamp();
+    let aid = client.create_auction(
+        &artist, &token_id, &collection_id, &1u64,
+        &1_000_000_i128, &duration, &valid_recipients(&env, &artist),
+    );
+    client.place_bid(&buyer, &aid, &2_000_000_i128);
+    // Advance to end_time + 1 — the exclusive boundary is now crossed.
+    env.ledger().set_timestamp(start + duration + 1);
+    client.finalize_auction(&buyer, &aid);
+    let auction = client.get_auction(&aid);
+    assert_eq!(
+        auction.status,
+        AuctionStatus::Finalized,
+        "auction must be Finalized one second past end_time"
+    );
+    assert_eq!(
+        auction.highest_bidder,
+        Some(buyer.clone()),
+        "winning bidder must be recorded after finalization"
+    );
+    // NFT must have transferred to the winner.
+    assert_eq!(
+        MockNftClient::new(&env, &collection_id).owner_of(&1u64),
+        buyer,
+        "NFT must belong to the winning bidder after finalization"
+    );
+}
+
+/// One second BEFORE end_time (timestamp = end_time - 1) must fail.
+/// This is the "just before" case: adjacent to the passing test above it
+/// makes the exclusive boundary unambiguous in both directions.
+#[test]
+fn test_finalize_auction_one_second_before_deadline_rejected() {
+    let (env, client, artist, buyer, token_id, _cid, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    let duration = 3_600u64;
+    let start = env.ledger().timestamp();
+    let aid = client.create_auction(
+        &artist, &token_id, &collection_id, &1u64,
+        &1_000_000_i128, &duration, &valid_recipients(&env, &artist),
+    );
+    client.place_bid(&buyer, &aid, &2_000_000_i128);
+    // One second before the deadline.
+    env.ledger().set_timestamp(start + duration - 1);
+    let result = client.try_finalize_auction(&buyer, &aid);
+    assert!(result.is_err(), "finalize must fail one second before end_time");
+    // The failed call must not mutate state.
+    assert_eq!(
+        client.get_auction(&aid).status,
+        AuctionStatus::Active,
+        "auction must remain Active after a rejected finalize attempt"
+    );
+    assert_eq!(
+        client.get_auction(&aid).highest_bidder,
+        Some(buyer),
+        "highest bidder must be unchanged after rejected finalize"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Zero-price listing boundary tests (Issue acceptance criteria)
+//
+// The contract's current policy: price must be strictly positive (> 0).
+// A zero price is rejected with InvalidPrice (#2) at create_listing time.
+// A negative price is also rejected with the same error.
+// Any positive price >= 1 stroop is accepted.
+// ══════════════════════════════════════════════════════════════
+
+/// Zero price is explicitly invalid and must be rejected with the contract's
+/// documented InvalidPrice error (#2). This is the named error boundary test.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_create_listing_zero_price_boundary() {
+    let (env, client, artist, _, token_id, _, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    // price = 0 must be rejected with InvalidPrice (#2).
+    client.create_listing(
+        &artist, &0_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &valid_recipients(&env, &artist), &None::<u64>,
+    );
+}
+
+/// Negative price must also be rejected with InvalidPrice (#2). The contract's
+/// price validation guards price <= 0, covering both zero and negative values.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_create_listing_negative_price_boundary() {
+    let (env, client, artist, _, token_id, _, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    // price = -1 must be rejected with InvalidPrice (#2).
+    client.create_listing(
+        &artist, &-1_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &valid_recipients(&env, &artist), &None::<u64>,
+    );
+}
+
+/// The minimum valid price is 1 stroop (the smallest positive integer). This
+/// passes to confirm the boundary is exclusive at zero: price == 1 is accepted.
+#[test]
+fn test_create_listing_minimum_positive_price_accepted() {
+    let (env, client, artist, _, token_id, _, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    // price = 1 is the smallest positive value; must succeed.
+    let listing_id = client.create_listing(
+        &artist, &1_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &valid_recipients(&env, &artist), &None::<u64>,
+    );
+    let listing = client.get_listing(&listing_id);
+    assert_eq!(listing.price, 1_i128, "listing price must be stored as-is");
+    assert_eq!(
+        listing.status,
+        crate::types::ListingStatus::Active,
+        "listing with minimum price must be Active"
+    );
+}
+
+/// A normal positive price (10_000_000 stroops) continues to work correctly
+/// after the boundary tests above — the zero-price check does not regress
+/// any valid existing listing path.
+#[test]
+fn test_create_listing_normal_positive_price_unaffected() {
+    let (env, client, artist, buyer, token_id, _, collection_id) = setup();
+    client.set_admin(&artist);
+    client.add_token_to_whitelist(&artist, &token_id);
+    let price = 10_000_000_i128;
+    let listing_id = client.create_listing(
+        &artist, &price, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &valid_recipients(&env, &artist), &None::<u64>,
+    );
+    assert!(client.buy_artwork(&buyer, &listing_id));
+    assert_eq!(
+        client.get_listing(&listing_id).status,
+        crate::types::ListingStatus::Sold,
+        "normal positive-price listing must sell successfully"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Duplicate-recipient royalty split policy tests
+//
+// validate_recipients rejects any list containing the same address more
+// than once (DuplicateRecipient #44). Each address may appear at most once
+// so payouts are unambiguous and no recipient is accidentally paid twice.
+// ══════════════════════════════════════════════════════════════
+
+/// Two entries with the same recipient address must be rejected with
+/// DuplicateRecipient (#44), even when their combined basis-point total
+/// is exactly 10 000 (which would otherwise be a valid sum).
+/// This is the primary duplicate-recipient policy test.
+#[test]
+#[should_panic(expected = "Error(Contract, #44)")]
+fn test_duplicate_recipient_same_address_rejected() {
+    let (env, client, admin, _, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    // Same address twice at 5 000 bps each — sum = 10 000 (valid total)
+    // but the address is duplicated, which must be rejected.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+    ];
+    client.create_listing(
+        &admin, &5_000_000_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
+}
+
+/// Confirms the error code is precisely DuplicateRecipient (#44) and NOT
+/// RoyaltyExceedsLimit (#26), even when the combined total exceeds 10 000 bps.
+/// The duplicate-address guard fires before the basis-point-sum guard.
+#[test]
+#[should_panic(expected = "Error(Contract, #44)")]
+fn test_duplicate_recipient_error_is_44_not_26() {
+    let (env, client, admin, _, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    // Duplicate AND over 10 000 total: duplicate guard fires first.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 6_000 },
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+    ];
+    client.create_listing(
+        &admin, &5_000_000_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
+}
+
+/// Two DISTINCT recipient addresses with the same combined total (10 000 bps)
+/// must be accepted — the duplicate check is address-based only.
+/// Confirms the policy does not overshoot and block legitimate splits.
+/// Also verifies each recipient is paid their exact declared share.
+#[test]
+fn test_distinct_recipients_each_paid_exact_declared_share() {
+    let (env, client, admin, buyer, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    let collaborator = Address::generate(&env);
+    let price = 10_000_000_i128;
+
+    // Two different addresses, 5 000 + 5 000 = 10 000 bps — valid.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 5_000 },
+        crate::types::Recipient { address: collaborator.clone(), percentage: 5_000 },
+    ];
+    let listing_id = client.create_listing(
+        &admin, &price, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
+    assert_eq!(listing_id, 1u64, "listing with distinct 50/50 split must be created");
+
+    // Settle the listing and verify each recipient receives exactly their share.
+    let token = soroban_sdk::token::TokenClient::new(&env, &token_id);
+    let admin_before = token.balance(&admin);
+    let collab_before = token.balance(&collaborator);
+
+    assert!(client.buy_artwork(&buyer, &listing_id));
+
+    let admin_gain = token.balance(&admin) - admin_before;
+    let collab_gain = token.balance(&collaborator) - collab_before;
+
+    assert_eq!(admin_gain, price / 2, "admin must receive exactly 50% of the price");
+    assert_eq!(collab_gain, price / 2, "collaborator must receive exactly 50% of the price");
+    assert_eq!(
+        admin_gain + collab_gain,
+        price,
+        "combined payout must equal the full price (no stroop lost)"
+    );
+}
+
+/// The total royalty bounds remain enforced even after duplicate-recipient
+/// validation passes. A valid two-recipient list that sums to 10 001 bps
+/// must still be rejected with RoyaltyExceedsLimit (#26), not silently accepted.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_distinct_recipients_total_bounds_still_enforced() {
+    let (env, client, admin, _, token_id, _, collection_id) = setup_with_roles();
+    client.add_token_to_whitelist(&admin, &token_id);
+    let collaborator = Address::generate(&env);
+    // Distinct addresses but sum = 10 001 bps > 10 000 — must be rejected.
+    let recipients = soroban_sdk::vec![
+        &env,
+        crate::types::Recipient { address: admin.clone(), percentage: 5_001 },
+        crate::types::Recipient { address: collaborator.clone(), percentage: 5_000 },
+    ];
+    client.create_listing(
+        &admin, &5_000_000_i128, &symbol_short!("XLM"),
+        &token_id, &collection_id, &1u64, &1u64,
+        &recipients, &None::<u64>,
+    );
 }

@@ -400,7 +400,9 @@ function CreatorControls({ auction, publicKey, onChanged }: CreatorControlsProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between">
-              <h3 className="text-base font-bold text-gray-900">Cancel this auction?</h3>
+              <h3 className="text-base font-bold text-gray-900">
+                Cancel auction #{auction.auction_id}?
+              </h3>
               <button
                 onClick={() => setConfirmCancel(false)}
                 disabled={isCancelling}
@@ -411,8 +413,9 @@ function CreatorControls({ auction, publicKey, onChanged }: CreatorControlsProps
               </button>
             </div>
             <p className="mt-3 text-sm text-gray-600">
-              The escrowed NFT will be returned to your wallet. This cannot be undone — you would
-              need to create a new auction to relist it.
+              You are about to cancel auction #{auction.auction_id}. The escrowed NFT will be
+              returned to your wallet if the transaction confirms. This cannot be undone — you
+              would need to create a new auction to relist it.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -425,6 +428,7 @@ function CreatorControls({ auction, publicKey, onChanged }: CreatorControlsProps
               <button
                 onClick={handleCancel}
                 disabled={isCancelling}
+                data-testid="confirm-cancel-auction-btn"
                 className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50"
               >
                 {isCancelling ? "Cancelling…" : "Cancel auction"}

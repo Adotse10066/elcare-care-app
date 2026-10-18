@@ -190,6 +190,8 @@ Copy `.env.example` to `.env.local` and fill in your values:
 cp .env.example .env.local
 ```
 
+> **Security reminder:** `.env.local` is listed in `.gitignore` and must never be committed. Use only placeholder or testnet values — never paste real API keys, JWTs, private keys, or production credentials into a file that lives inside the repository. If you accidentally commit secrets, rotate them immediately and treat the old values as compromised.
+
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEXT_PUBLIC_CONTRACT_ID` | ✅ | Deployed Soroban marketplace contract address |
@@ -288,26 +290,30 @@ Uploads flow through Next.js API routes (`/api/ipfs/upload-image`, `/api/ipfs/up
 
 ### Unit tests (Jest)
 
+**Prerequisites:** none beyond `npm install`. No dev server, live network, wallet extension, RPC endpoint, or database is required.
+
 ```bash
-npm run test
-npm run test:coverage
+npm run test             # run all unit tests
+npm run test:coverage    # run with coverage report
+npm run test:a11y        # accessibility-focused subset
 ```
 
-28 test files covering components, hooks, contract utilities, and the indexer client.
+28 test files covering components, hooks, contract utilities, and the indexer client. Tests under `tests/e2e/` are excluded by the Jest config and do not run here.
+
+---
 
 ### E2E tests (Playwright)
 
-```bash
-# Requires dev server running in E2E mode
-npm run dev:e2e
+**Prerequisites:** a populated `.env.local` (copy from `.env.example`). No live Stellar network, real wallet extension, or external database is required — the suite uses a mock Freighter wallet and a mock blockchain. Playwright starts the dev server automatically in mock-chain mode (`npm run dev:e2e`) before the tests run; you do not need to start it manually.
 
-# In a separate terminal
-npm run test:e2e
+```bash
+npm run test:e2e          # run all E2E suites (headless, Playwright manages the dev server)
+npm run test:e2e:ui       # same, with the Playwright interactive UI
 ```
 
 Test suites: `smoke`, `wallet-connection`, `wallet-network`, `wallet-not-installed`, `listing-flow`, `purchase-flow`, `marketplace-journey`.
 
-All E2E tests use a mock Freighter wallet (no real extension required) and a mock chain (no live Stellar network required).
+> **Note:** `npm run test:e2e:live` is a separate script that runs against a real Stellar testnet and requires a live RPC endpoint, funded test wallet, and a running indexer. It is not part of the standard local workflow.
 
 ---
 

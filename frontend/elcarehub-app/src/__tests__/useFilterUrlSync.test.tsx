@@ -85,6 +85,18 @@ describe("useFilterUrlSync", () => {
     expect(api().initialFilters.status).toBe("Active");
   });
 
+  it("restores an auction status query and clears only that parameter", () => {
+    mockSearchParams = new URLSearchParams("status=Finalized&campaign=spring");
+    const { api } = renderConsumer();
+
+    expect(api().initialFilters.status).toBe("Finalized");
+    api().syncQueryParam("status", null);
+
+    expect(mockReplace).toHaveBeenCalledWith("/explore?campaign=spring", {
+      scroll: false,
+    });
+  });
+
   it("parses collection from ?collection= params", () => {
     mockSearchParams = new URLSearchParams("collection=C1&collection=C2");
     const { api } = renderConsumer();
