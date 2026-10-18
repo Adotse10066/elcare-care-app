@@ -8,12 +8,18 @@ import { useState, useEffect, useId, useMemo } from "react";
 import { Auction } from "@/lib/contract";
 import { useWalletContext } from "@/context/WalletContext";
 import { usePlaceBid } from "@/hooks/usePlaceBid";
-import { useFinalizeAuction } from "@/hooks/useAuctions";
+import { useFinalizeAuction, useMinBidIncrement } from "@/hooks/useAuctions";
+import { useServerClock } from "@/hooks/useServerClock";
 import { GuardButton } from "@/components/WalletGuard";
 import { TxErrorPanel } from "@/components/TxErrorPanel";
 import { useTxLifecycle, txStateLabel, isTxActive } from "@/hooks/useTxLifecycle";
 import { getTokenConfigByAddress, getNativeTokenConfig } from "@/config/tokens";
-import { validateAmountInput, baseToDisplay } from "@/lib/amount";
+import { config } from "@/lib/config";
+import {
+  calculateMinimumNextBid,
+  validateAmountInput,
+  baseToDisplay,
+} from "@/lib/amount";
 import Link from "next/link";
 import {
   Gavel,
@@ -41,15 +47,17 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 }
 
-function useCountdown(endTime: number) {
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+function useCountdown(endTime: number, serverOffsetMs: number) {
+  const [now, setNow] = useState(() =>
+    Math.floor((Date.now() + serverOffsetMs) / 1000)
+  );
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Math.floor(Date.now() / 1000));
-    }, 1000);
+    const updateNow = () => setNow(Math.floor((Date.now() + serverOffsetMs) / 1000));
+    updateNow();
+    const interval = setInterval(updateNow, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [serverOffsetMs]);
 
   const remaining = Math.max(0, endTime - now);
   const days = Math.floor(remaining / 86400);
@@ -69,6 +77,8 @@ export function BiddingPanel({
   const { publicKey } = useWalletContext();
   const { bid } = usePlaceBid(publicKey);
   const { finalize } = useFinalizeAuction(publicKey);
+  const serverClock = useServerClock();
+  const minimumIncrement = useMinBidIncrement();
 
   // Single lifecycle instance shared by both bid and finalize actions.
   // The duplicate-submission guard in useTxLifecycle prevents concurrent runs.
@@ -78,10 +88,12 @@ export function BiddingPanel({
   });
 
   const { days, hours, minutes, seconds, isExpired } = useCountdown(
-    auction.end_time
+    auction.end_time,
+    serverClock.offsetMs
   );
 
   const [bidAmount, setBidAmount] = useState("");
+  const [hasEditedBidAmount, setHasEditedBidAmount] = useState(false);
   const [bidSuccess, setBidSuccess] = useState(false);
   const bidErrorId = useId();
 
@@ -92,12 +104,11 @@ export function BiddingPanel({
     [auction.token]
   );
 
-  // ISSUE-019: minimum next bid = current highest bid + 1 base-unit
-  // increment. If no bid yet, minimum is the reserve price. Computed
-  // entirely in bigint — auction.highest_bid/reserve_price are already
-  // base-unit bigints, so no floating-point arithmetic is involved.
-  const minimumNextBidBase =
-    auction.highest_bid > 0n ? auction.highest_bid + 1n : auction.reserve_price;
+  const minimumNextBidBase = calculateMinimumNextBid(
+    auction.highest_bid,
+    auction.reserve_price,
+    minimumIncrement
+  );
   const minimumNextBidDisplay = baseToDisplay(minimumNextBidBase, bidToken);
 
   const isOwn = publicKey === auction.creator;
@@ -110,11 +121,10 @@ export function BiddingPanel({
 
   // Pre-fill input with minimum next bid when the panel first becomes interactive.
   useEffect(() => {
-    if (canBid && !bidAmount) {
+    if (canBid && !hasEditedBidAmount) {
       setBidAmount(minimumNextBidDisplay);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canBid]);
+  }, [canBid, hasEditedBidAmount, minimumNextBidDisplay]);
 
   // ISSUE-019 / #521: client-side validation against minimum next bid using
   // bigint-safe parsing — rejects malformed input, excess decimal places,
@@ -265,6 +275,12 @@ export function BiddingPanel({
         )}
       </div>
 
+      {isAuctionActive && isExpired && (
+        <p role="status" className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600">
+          Bidding is closed because this auction has ended.
+        </p>
+      )}
+
       {/* Bid success */}
       {bidSuccess && (
         <div role="status" className="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2 text-sm font-medium text-green-700">
@@ -314,6 +330,7 @@ export function BiddingPanel({
                 value={bidAmount}
                 onChange={(e) => {
                   setBidAmount(e.target.value);
+                  setHasEditedBidAmount(true);
                   setBidSuccess(false);
                 }}
                 placeholder={`Min ${minimumNextBidDisplay} ${bidToken.symbol}`}

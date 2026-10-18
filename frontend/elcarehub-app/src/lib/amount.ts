@@ -135,6 +135,15 @@ export function baseToDisplay(base: bigint, token: TokenConfig): string {
   return baseToDecimalString(base, token.decimals);
 }
 
+/** Calculate the contract's minimum accepted next bid in base units. */
+export function calculateMinimumNextBid(
+  highestBid: bigint,
+  reservePrice: bigint,
+  minimumIncrement: bigint
+): bigint {
+  return highestBid > 0n ? highestBid + minimumIncrement : reservePrice;
+}
+
 /**
  * Parse user input (display units) into base units for a given asset.
  * Returns null when input is invalid or has more precision than the token supports.

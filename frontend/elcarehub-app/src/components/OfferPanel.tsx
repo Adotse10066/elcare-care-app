@@ -34,7 +34,10 @@ import {
 import { clsx } from "clsx";
 import { Offer, stroopsToXlm, deriveOfferUIStatus } from "@/lib/contract";
 import { SUPPORTED_TOKENS, TokenConfig } from "@/config/tokens";
-import { OfferStatusBadge } from "@/components/OfferStatusBadge";
+import {
+  OfferStatusBadge,
+  getOfferStatusBadgeClass,
+} from "@/components/OfferStatusBadge";
 import { GuardButton } from "@/components/WalletGuard";
 import { useAcceptOffer, useRejectOffer } from "@/hooks/useOffers";
 import { useModalA11y } from "@/hooks/useModalA11y";

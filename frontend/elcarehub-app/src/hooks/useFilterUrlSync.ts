@@ -26,6 +26,8 @@ export interface FilterUrlSync {
    * not scroll or re-fetch server data.
    */
   syncToUrl: (filters: Filters, page: number) => void;
+  /** Update one query parameter without dropping unrelated parameters. */
+  syncQueryParam: (name: string, value: string | null) => void;
 }
 
 /**
@@ -79,5 +81,20 @@ export function useFilterUrlSync(): FilterUrlSync {
     [router, pathname],
   );
 
-  return { initialFilters, initialPage, syncToUrl };
+  const syncQueryParam = useCallback(
+    (name: string, value: string | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (value === null || value === "") {
+        params.delete(name);
+      } else {
+        params.set(name, value);
+      }
+
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
+  return { initialFilters, initialPage, syncToUrl, syncQueryParam };
 }

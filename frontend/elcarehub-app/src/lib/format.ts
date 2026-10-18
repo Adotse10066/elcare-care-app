@@ -93,8 +93,11 @@ export function formatLedgerTime(
 ): string {
   const { locale = "en-US", timeZone = "UTC" } = opts;
   return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     timeZone,
     timeZoneName: "short",
   }).format(new Date(ts));

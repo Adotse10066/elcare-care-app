@@ -68,3 +68,47 @@ Follow the procedure in `indexer/.github/migration-safety.md` under "Production 
 ---
 
 **Need help?** Refer to `indexer/.github/migration-safety.md` for detailed procedures and troubleshooting.
+
+---
+
+# Event Schema Changes
+
+Event schemas are auto-generated from Rust contract event structs. When you add or modify event structs in `contracts/soroban-marketplace/src/events.rs`, you must ensure the indexer's schema registry is updated accordingly.
+
+## When to run
+
+Run the following check before opening a pull request if you:
+- Add a new event struct in `contracts/soroban-marketplace/src/events.rs`
+- Modify an existing event struct in that file
+- Bump a `schema_version` field
+
+## The command
+
+From the repository root:
+
+```bash
+npm run check-event-schemas
+```
+
+## What success looks like
+
+Exit code 0 with output similar to:
+
+```
+event-schema-lint: ok — 12 versioned event struct(s) verified against indexer/src/event-schemas.ts
+  ok LISTING_CREATED (ListingCreatedEvent)
+  ok ARTWORK_SOLD (ArtworkSoldEvent)
+  ...
+```
+
+## What failure looks like
+
+Exit code 1 indicates the tool found inconsistencies. It reports which schemas are missing or have an incorrect `schema_version` field definition. Update the event struct in `contracts/soroban-marketplace/src/events.rs` (not the generated files) until the check passes.
+
+## Important: do not manually edit generated files
+
+Schemas are auto-generated from the contract event definitions. Only edit `contracts/soroban-marketplace/src/events.rs` (or the relevant contract source); never hand-edit the generated indexer schema files in `indexer/src/event-schemas.ts`.
+
+## CI
+
+The same command runs automatically in the `event-schema-lint` CI job on every pull request. A PR with a failing check will be blocked until the issue is resolved.

@@ -81,17 +81,24 @@ npm install
 # 2. Copy and fill in environment variables
 cp .env.example .env
 
-# 3. Start PostgreSQL + Redis
+# 3. Update network configuration (default: testnet)
+#    For testnet (default): leave STELLAR_NETWORK=testnet and use Soroban testnet RPC
+#    For mainnet: set STELLAR_NETWORK=mainnet and provide mainnet contract IDs
+#    Note: Mainnet configuration requires intentional deployment values.
+
+# 4. Start PostgreSQL + Redis
 docker compose up -d db redis
 
-# 4. Run database migrations
+# 5. Run database migrations
 npx prisma migrate dev
 
-# 5. Start the indexer in watch mode
+# 6. Start the indexer in watch mode
 npm run dev
 ```
 
 The API is now available at **http://localhost:4000**
+
+**Network note:** By default, the indexer runs against **Stellar testnet** (`STELLAR_NETWORK=testnet`). This is safe for local development and testing. To run against mainnet, you must intentionally configure the environment variables with mainnet contract IDs and RPC endpoints.
 
 ### Docker (full stack)
 
@@ -125,7 +132,7 @@ npm run backfill -- --start=123456 --end=124999 --rpc=https://your-archival-rpc
 | `LAUNCHPAD_CONTRACT_ID` | ✅ | — | Launchpad factory contract address |
 | `REDIS_URL` | ✅ | `redis://localhost:6379` | Redis connection string |
 | `STELLAR_RPC_URL` | ✅ | `https://soroban-testnet.stellar.org` | Soroban RPC endpoint |
-| `STELLAR_NETWORK` | ✅ | `testnet` | `testnet` or `mainnet` |
+| `STELLAR_NETWORK` | ✅ | `testnet` | **Target network: `testnet` or `mainnet`.** Local development uses `testnet` by default. Mainnet requires intentional deployment configuration. |
 | `STELLAR_HORIZON_URL` | ⬜ | `https://horizon-testnet.stellar.org` | Horizon REST API |
 | `PORT` | ⬜ | `4000` | HTTP server port |
 | `POLL_INTERVAL_MS` | ⬜ | `5000` | Polling interval in milliseconds |
@@ -399,7 +406,25 @@ npm run test -- --watch
 npm run lint
 ```
 
-The test suite uses **Vitest** (configured in `vitest.config.mts` with ESM mode) and **Supertest** for API integration tests. Tests are in `src/__tests__/` and cover the poller, parser, event-sync, API routes, cache middleware, rate limiting, Redis integration, and re-org handling.
+### Run a specific test file
+
+Vitest accepts file paths as positional filters. To run a single test file (e.g., `collection-conformance.test.ts`):
+
+```bash
+npm run test -- tests/collection-conformance.test.ts
+```
+
+This runs only the tests in that file without requiring a live production endpoint.
+
+### Filter tests by name pattern
+
+Use `--testNamePattern` (short `-t`) to run tests whose full names match a regular expression:
+
+```bash
+npm run test -- -t "collections"
+```
+
+The test suite uses **Vitest** (configured in `vitest.config.mts` with ESM mode) and **Supertest** for API integration tests. Tests are in `src/__tests__/` and `tests/` and cover the poller, parser, event-sync, API routes, cache middleware, rate limiting, Redis integration, and re-org handling.
 
 ---
 

@@ -378,3 +378,56 @@ fn test_pause_matrix_any_paused_consistent_with_is_paused() {
     assert!(pm2.any_paused);
     assert!(pm2.function_paused);
 }
+
+// ══════════════════════════════════════════════════════════════
+// REGRESSION: Emergency pause blocks marketplace mutation while
+// preserving read access (acceptance criteria for Issue #464 / spec task).
+// ══════════════════════════════════════════════════════════════
+
+/// A representative mutation (buy_artwork) is rejected with ContractPaused
+/// (#23) when the admin has paused the contract, and a read-only query
+/// (get_listing) continues to return normally under the same pause.
+#[test]
+fn test_pause_regression_mutation_blocked_read_available() {
+    let s = setup();
+
+    // 1. Create a listing while the contract is still unpaused.
+    let listing_id = make_listing(&s);
+    let listing_before = s.client.get_listing(&listing_id);
+    assert_eq!(listing_before.status, crate::types::ListingStatus::Active);
+
+    // 2. Admin pauses the contract.
+    s.client.admin_pause(&s.admin);
+    assert!(s.client.is_paused());
+
+    // 3. buy_artwork is a state-mutating operation — it must be rejected.
+    let result = s.client.try_buy_artwork(&s.buyer, &listing_id);
+    assert!(
+        result.is_err(),
+        "buy_artwork must fail while the contract is paused"
+    );
+    // Error must carry the documented ContractPaused code (#23).
+    let err = result.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        crate::types::MarketplaceError::ContractPaused,
+        "paused mutation must return ContractPaused (#23)"
+    );
+
+    // 4. Read-only access is unaffected — get_listing must return the same
+    //    listing that existed before the pause.
+    let listing_after = s.client.get_listing(&listing_id);
+    assert_eq!(
+        listing_after.status,
+        crate::types::ListingStatus::Active,
+        "listing status must be unchanged: pause must not mutate state"
+    );
+    assert_eq!(
+        listing_after.listing_id, listing_before.listing_id,
+        "get_listing must return the correct record while paused"
+    );
+    assert_eq!(
+        listing_after.price, listing_before.price,
+        "listing price must be unchanged by the pause"
+    );
+}
