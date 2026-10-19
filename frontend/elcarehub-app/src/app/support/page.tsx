@@ -41,6 +41,46 @@ function SupportPageContent() {
           </p>
         </div>
 
+        {/* Route reference for contributors */}
+        <div className="mb-8 rounded-2xl border border-white/5 bg-white/5 p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">
+            Quick Route Reference
+          </h2>
+          <p className="mb-3 text-sm text-gray-300">
+            When reproducing a report, use these route patterns to locate listings:
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-xl bg-midnight-950/50 p-3">
+              <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500/20 text-xs font-bold text-brand-400">
+                L
+              </span>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-white">Fixed-Price Listing</p>
+                <p className="font-mono text-xs text-gray-400">/listings/[id]</p>
+                <p className="text-xs text-gray-500">
+                  Example: <span className="text-gray-400">/listings/123</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl bg-midnight-950/50 p-3">
+              <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-xs font-bold text-amber-400">
+                A
+              </span>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-white">Auction Listing</p>
+                <p className="font-mono text-xs text-gray-400">/auctions/[id]</p>
+                <p className="text-xs text-gray-500">
+                  Example: <span className="text-gray-400">/auctions/456</span>
+                </p>
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">
+            The [id] placeholder is a numeric identifier. Replace it with the ID from the report.
+            Never include real user wallet addresses or production identifiers in logs or screenshots.
+          </p>
+        </div>
+
         {/* Platform limits info box */}
         <div className="mb-8 rounded-2xl border border-brand-500/20 bg-brand-500/5 p-5 space-y-3">
           <div className="flex items-start gap-3">

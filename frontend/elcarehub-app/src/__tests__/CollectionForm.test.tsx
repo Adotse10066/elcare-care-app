@@ -2,16 +2,21 @@
  * Component tests for CollectionForm wizard.
  */
 import React from "react";
+import { TextEncoder } from "util";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+Object.defineProperty(globalThis, "TextEncoder", {
+  configurable: true,
+  value: TextEncoder,
+});
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockDeploy = jest.fn();
 const mockPushToast = jest.fn();
-const validPublicKey = `G${"A".repeat(55)}`;
-let mockPublicKey: string | null = validPublicKey;
-let mockNetwork = "testnet";
+let mockPublicKey: string | null = "G".repeat(56);
+let mockIsDeploying = false;
 
 jest.mock("@/context/WalletContext", () => ({
   useWalletContext: () => ({ publicKey: mockPublicKey }),
@@ -20,10 +25,10 @@ jest.mock("@/context/WalletContext", () => ({
 jest.mock("@/hooks/useLaunchpad", () => ({
   useDeployCollection: () => ({
     deploy: mockDeploy,
-    isDeploying: false,
+    isDeploying: mockIsDeploying,
     error: null,
   }),
-  useDeploySalt: () => "test-salt",
+  useDeploySalt: () => "test-deploy-salt",
   usePreflightDeploy: () => ({ result: null, isLoading: false }),
 }));
 
@@ -94,6 +99,7 @@ jest.mock("@/lib/config", () => ({
 }));
 
 import { CollectionForm } from "@/components/CollectionForm";
+import { COLLECTION_NAME_MAX_BYTES } from "@/lib/validation";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -109,8 +115,8 @@ async function advanceToStep(user: ReturnType<typeof userEvent.setup>, stepIndex
 describe("CollectionForm wizard", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPublicKey = validPublicKey;
-    mockNetwork = "testnet";
+    mockPublicKey = "G".repeat(56);
+    mockIsDeploying = false;
   });
 
   // ── Step 0: Kind Selection ─────────────────────────────────────────────────
@@ -184,6 +190,36 @@ describe("CollectionForm wizard", () => {
       await user.type(screen.getByPlaceholderText(/african legends/i), "My Collection");
       await user.type(screen.getByPlaceholderText(/AFRL/i), "MC");
       expect(screen.getByRole("button", { name: /next/i })).not.toBeDisabled();
+    });
+
+    it("accepts a collection name at the authoritative byte limit", async () => {
+      const user = userEvent.setup();
+      render(<CollectionForm />);
+      await advanceToStep(user, 1);
+      await user.type(
+        screen.getByPlaceholderText(/african legends/i),
+        "N".repeat(COLLECTION_NAME_MAX_BYTES),
+      );
+      await user.type(screen.getByPlaceholderText(/AFRL/i), "MC");
+      await user.click(screen.getByRole("button", { name: /next/i }));
+
+      expect(screen.getByRole("heading", { name: /economics/i })).toBeInTheDocument();
+    });
+
+    it("rejects the first byte beyond the authoritative name limit", async () => {
+      const user = userEvent.setup();
+      render(<CollectionForm />);
+      await advanceToStep(user, 1);
+      await user.type(
+        screen.getByPlaceholderText(/african legends/i),
+        "N".repeat(COLLECTION_NAME_MAX_BYTES + 1),
+      );
+      await user.type(screen.getByPlaceholderText(/AFRL/i), "MC");
+      await user.click(screen.getByRole("button", { name: /next/i }));
+
+      expect(await screen.findByText(/too long \(65 bytes\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/collection details/i)).toBeInTheDocument();
+      expect(mockDeploy).not.toHaveBeenCalled();
     });
 
     it("Back button returns to step 0", async () => {
@@ -267,6 +303,17 @@ describe("CollectionForm wizard", () => {
       expect(
         screen.getByRole("button", { name: /deploy collection/i })
       ).toBeInTheDocument();
+    });
+
+    it("shows the pending state and blocks repeated deployment while deploying", async () => {
+      mockIsDeploying = true;
+      const user = userEvent.setup();
+      await goToStep3(user);
+      const deployButton = screen.getByRole("button", { name: /deploying to stellar/i });
+
+      expect(deployButton).toBeDisabled();
+      await user.click(deployButton);
+      expect(mockDeploy).not.toHaveBeenCalled();
     });
 
     it("calls deploy when Deploy Collection button is clicked", async () => {

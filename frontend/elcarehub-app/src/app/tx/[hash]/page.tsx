@@ -122,14 +122,14 @@ function AlertBanner({
 
 function LoadingScreen() {
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="text-center">
         <div className="text-4xl mb-4 animate-spin inline-block" aria-hidden="true">
           ⟳
         </div>
         <p className="text-gray-600">Looking up transaction…</p>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -137,7 +137,7 @@ function LoadingScreen() {
 
 function ErrorScreen({ hash, message }: { hash: string; message: string }) {
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow p-6 max-w-lg w-full">
         <h1 className="text-xl font-semibold text-red-700 mb-2">
           Transaction Not Found
@@ -154,7 +154,7 @@ function ErrorScreen({ hash, message }: { hash: string; message: string }) {
           ← Back to marketplace
         </Link>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -168,7 +168,7 @@ function WrongNetworkScreen({
   message: string;
 }) {
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow p-6 max-w-lg w-full space-y-4">
         <h1 className="text-xl font-semibold text-orange-700">
           Wrong Network
@@ -190,7 +190,7 @@ function WrongNetworkScreen({
           ← Back to marketplace
         </Link>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -312,7 +312,7 @@ export default function TxStatusPage({ params }: PageProps) {
   const isAutoPolling = !isTxLookupTerminal(data);
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
 
         {/* Header */}
@@ -540,6 +540,6 @@ export default function TxStatusPage({ params }: PageProps) {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

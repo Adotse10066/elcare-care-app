@@ -17,7 +17,7 @@ export default function LaunchpadPage() {
   const featured = collections.slice(0, 3);
 
   return (
-    <main className="min-h-screen bg-brand-50/20">
+    <div className="min-h-screen bg-brand-50/20">
       <div className="pt-24 pb-12">
         {/* Hero Section */}
         <section className="relative overflow-hidden bg-gradient-to-br from-brand-500 via-terracotta-500 to-mint-500 text-white">
@@ -256,6 +256,6 @@ export default function LaunchpadPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

@@ -303,7 +303,7 @@ export default function CollectionMintClient({ address }: { address: string }) {
   const isSignatureValid = signatureHex.trim() === "" || /^[0-9a-fA-F]{128}$/.test(signatureHex.trim());
 
   return (
-    <main className="min-h-screen bg-brand-50/20">
+    <div className="min-h-screen bg-brand-50/20">
       <Navbar />
       <div className="pt-24 pb-12">
         <div className="max-w-2xl mx-auto px-4">
@@ -662,6 +662,6 @@ export default function CollectionMintClient({ address }: { address: string }) {
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

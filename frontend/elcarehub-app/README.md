@@ -161,6 +161,25 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
+### Network configuration
+
+By default, the frontend targets **Stellar testnet** using the following configuration:
+
+| Variable | Default Value |
+|----------|---------------|
+| `NEXT_PUBLIC_STELLAR_NETWORK` | `testnet` |
+| `NEXT_PUBLIC_STELLAR_RPC_URL` | `https://soroban-testnet.stellar.org` |
+| `NEXT_PUBLIC_STELLAR_HORIZON_URL` | `https://horizon-testnet.stellar.org` |
+| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
+
+To run against **mainnet**, you must explicitly configure:
+
+1. `NEXT_PUBLIC_STELLAR_NETWORK=mainnet`
+2. Mainnet contract IDs (`NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_LAUNCHPAD_CONTRACT_ID`)
+3. Mainnet RPC endpoints
+
+Mainnet configuration requires intentional deployment values and is not suitable for local development without proper setup.
+
 ---
 
 ## Environment Variables
@@ -171,14 +190,16 @@ Copy `.env.example` to `.env.local` and fill in your values:
 cp .env.example .env.local
 ```
 
+> **Security reminder:** `.env.local` is listed in `.gitignore` and must never be committed. Use only placeholder or testnet values — never paste real API keys, JWTs, private keys, or production credentials into a file that lives inside the repository. If you accidentally commit secrets, rotate them immediately and treat the old values as compromised.
+
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEXT_PUBLIC_CONTRACT_ID` | ✅ | Deployed Soroban marketplace contract address |
 | `NEXT_PUBLIC_LAUNCHPAD_CONTRACT_ID` | ✅ | Deployed launchpad factory address |
-| `NEXT_PUBLIC_STELLAR_NETWORK` | ✅ | `testnet` or `mainnet` |
-| `NEXT_PUBLIC_STELLAR_RPC_URL` | ✅ | Soroban RPC endpoint |
-| `NEXT_PUBLIC_STELLAR_HORIZON_URL` | ✅ | Horizon REST API endpoint |
-| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | ✅ | Network passphrase |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | ✅ | **Target network: `testnet` (default) or `mainnet`.** Local development uses `testnet` by default. |
+| `NEXT_PUBLIC_STELLAR_RPC_URL` | ✅ | Soroban RPC endpoint (default: `https://soroban-testnet.stellar.org`) |
+| `NEXT_PUBLIC_STELLAR_HORIZON_URL` | ✅ | Horizon REST API endpoint (default: `https://horizon-testnet.stellar.org`) |
+| `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | ✅ | Network passphrase (default: `Test SDF Network ; September 2015` for testnet) |
 | `NEXT_PUBLIC_INDEXER_URL` | ✅ | Indexer API base URL |
 | `NEXT_PUBLIC_PINATA_GATEWAY` | ✅ | Pinata IPFS gateway URL |
 | `PINATA_JWT` | ✅ | Pinata JWT — server-side only, never commit |
@@ -269,26 +290,30 @@ Uploads flow through Next.js API routes (`/api/ipfs/upload-image`, `/api/ipfs/up
 
 ### Unit tests (Jest)
 
+**Prerequisites:** none beyond `npm install`. No dev server, live network, wallet extension, RPC endpoint, or database is required.
+
 ```bash
-npm run test
-npm run test:coverage
+npm run test             # run all unit tests
+npm run test:coverage    # run with coverage report
+npm run test:a11y        # accessibility-focused subset
 ```
 
-28 test files covering components, hooks, contract utilities, and the indexer client.
+28 test files covering components, hooks, contract utilities, and the indexer client. Tests under `tests/e2e/` are excluded by the Jest config and do not run here.
+
+---
 
 ### E2E tests (Playwright)
 
-```bash
-# Requires dev server running in E2E mode
-npm run dev:e2e
+**Prerequisites:** a populated `.env.local` (copy from `.env.example`). No live Stellar network, real wallet extension, or external database is required — the suite uses a mock Freighter wallet and a mock blockchain. Playwright starts the dev server automatically in mock-chain mode (`npm run dev:e2e`) before the tests run; you do not need to start it manually.
 
-# In a separate terminal
-npm run test:e2e
+```bash
+npm run test:e2e          # run all E2E suites (headless, Playwright manages the dev server)
+npm run test:e2e:ui       # same, with the Playwright interactive UI
 ```
 
 Test suites: `smoke`, `wallet-connection`, `wallet-network`, `wallet-not-installed`, `listing-flow`, `purchase-flow`, `marketplace-journey`.
 
-All E2E tests use a mock Freighter wallet (no real extension required) and a mock chain (no live Stellar network required).
+> **Note:** `npm run test:e2e:live` is a separate script that runs against a real Stellar testnet and requires a live RPC endpoint, funded test wallet, and a running indexer. It is not part of the standard local workflow.
 
 ---
 

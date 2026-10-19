@@ -120,7 +120,7 @@ export default function CollectionDetailClient({ address }: { address: string })
   }, [address, voucherFilter]);
 
   return (
-    <main className="min-h-screen bg-brand-50/20">
+    <div className="min-h-screen bg-brand-50/20">
       <Navbar />
 
       <div className="pt-24 pb-12">
@@ -558,6 +558,6 @@ export default function CollectionDetailClient({ address }: { address: string })
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

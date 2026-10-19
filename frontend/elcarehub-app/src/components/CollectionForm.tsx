@@ -17,6 +17,7 @@ import { DEFAULT_TOKEN } from "@/config/tokens";
 import { useSupportedTokens } from "@/hooks/useSupportedTokens";
 import { getDefaultSupportedToken } from "@/lib/token-support";
 import { config } from "@/lib/config";
+import { validateCollectionName } from "@/lib/validation";
 
 function isValidStellarAddress(addr: string): boolean {
   try {
@@ -180,7 +181,12 @@ export function CollectionForm() {
   const fieldErrors = useMemo(() => {
     const errors: Record<string, string> = {};
     if (step === 1) {
-      if (!form.name.trim()) errors.name = "Collection name is required.";
+      if (!form.name.trim()) {
+        errors.name = "Collection name is required.";
+      } else {
+        const nameError = validateCollectionName(form.name);
+        if (nameError) errors.name = nameError;
+      }
       if (is721) {
         if (!form.symbol.trim()) {
           errors.symbol = "Symbol is required for 721 collections.";
@@ -208,7 +214,7 @@ export function CollectionForm() {
       case 0:
         return true;
       case 1:
-        if (!form.name.trim()) return false;
+        if (validateCollectionName(form.name)) return false;
         if (is721 && !form.symbol.trim()) return false;
         if (is721 && !/^[A-Z0-9]{1,10}$/.test(form.symbol)) return false;
         if (is721 && form.maxSupply < 1) return false;
@@ -226,7 +232,7 @@ export function CollectionForm() {
   }, [step, form, is721, hasSupportedTokens]);
 
   const handleDeploy = async () => {
-    if (!publicKey) return;
+    if (!publicKey || validateCollectionName(form.name)) return;
 
     const input: DeployCollectionInput = {
       ...form,

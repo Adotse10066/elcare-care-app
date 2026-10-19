@@ -20,6 +20,22 @@ jest.mock('@/hooks/usePlaceBid', () => ({
 
 jest.mock('@/hooks/useAuctions', () => ({
   useFinalizeAuction: () => ({ finalize: mockFinalize, isFinalizing: false, error: null }),
+  useMinBidIncrement: () => 1_000_000n,
+}));
+
+jest.mock('@/hooks/useServerClock', () => ({
+  useServerClock: () => ({ offsetMs: 0, isSynced: false }),
+}));
+
+jest.mock('@/hooks/useTxLifecycle', () => ({
+  useTxLifecycle: () => ({
+    txState: { state: 'idle', txHash: null, error: null },
+    isActive: false,
+    run: async (action: () => Promise<boolean>) => action(),
+    reset: jest.fn(),
+  }),
+  txStateLabel: () => '',
+  isTxActive: () => false,
 }));
 
 jest.mock('@/components/WalletGuard', () => ({
@@ -38,8 +54,21 @@ jest.mock('@/components/WalletGuard', () => ({
   ),
 }));
 
+jest.mock('@/components/TxErrorPanel', () => ({
+  TxErrorPanel: () => null,
+}));
+
 jest.mock('@/lib/contract', () => ({
   stroopsToXlm: (v: bigint) => String(Number(v) / 10_000_000),
+}));
+
+jest.mock('@/config/tokens', () => ({
+  getTokenConfigByAddress: () => null,
+  getNativeTokenConfig: () => ({ address: 'NATIVE', decimals: 7, symbol: 'XLM' }),
+}));
+
+jest.mock('@/lib/config', () => ({
+  config: { networkPassphrase: 'test-network', contractId: 'test-contract' },
 }));
 
 jest.mock('lucide-react', () =>
@@ -116,6 +145,13 @@ describe('BiddingPanel', () => {
     expect(screen.getByRole('button', { name: /finalize/i })).toBeInTheDocument();
   });
 
+  it('closes bidding and hides the bid action after the deadline', () => {
+    render(<BiddingPanel auction={makeAuction({ end_time: 1 })} />);
+
+    expect(screen.getByText(/bidding is closed because this auction has ended/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /place bid/i })).not.toBeInTheDocument();
+  });
+
   it('calls finalize when Finalize Auction is clicked', async () => {
     mockFinalize.mockResolvedValueOnce(true);
     const onFinalized = jest.fn();
@@ -146,13 +182,13 @@ describe('BiddingPanel', () => {
       />
     );
     expect(screen.getByTestId('minimum-next-bid')).toBeInTheDocument();
-    // Minimum = 2 XLM (current) + 0.0000001 XLM (increment) = 2.0000001
-    expect(screen.getByTestId('minimum-next-bid').textContent).toContain('2.0000001');
+    // Minimum = 2 XLM (current) + 0.1 XLM (contract default increment) = 2.1
+    expect(screen.getByTestId('minimum-next-bid').textContent).toContain('2.1');
   });
 
-  it('does not show minimum next bid before the first bid', () => {
+  it('shows the reserve as the minimum next bid before the first bid', () => {
     render(<BiddingPanel auction={makeAuction({ highest_bid: 0n })} />);
-    expect(screen.queryByTestId('minimum-next-bid')).not.toBeInTheDocument();
+    expect(screen.getByTestId('minimum-next-bid').textContent).toContain('1 XLM');
   });
 
   it('blocks bids below the minimum next bid with an inline error', async () => {
@@ -165,7 +201,7 @@ describe('BiddingPanel', () => {
       />
     );
 
-    // Try to bid exactly the current bid (2 XLM) — should be rejected.
+    // Try to bid below the configured minimum (2.1 XLM) — should be rejected.
     const input = screen.getByPlaceholderText(/min/i);
     await user.clear(input);
     await user.type(input, '2');
@@ -195,8 +231,8 @@ describe('BiddingPanel', () => {
 
     const input = screen.getByPlaceholderText(/min/i);
     await user.clear(input);
-    // Bid exactly minimum next bid: 2.0000001 XLM
-    await user.type(input, '2.0000001');
+    // Bid exactly minimum next bid: 2.1 XLM
+    await user.type(input, '2.1');
 
     // Should have NO validation error.
     await waitFor(() => {
@@ -208,7 +244,7 @@ describe('BiddingPanel', () => {
     expect(bidBtn).not.toBeDisabled();
 
     await user.click(bidBtn);
-    await waitFor(() => expect(mockBid).toHaveBeenCalledWith(1, 2.0000001));
+    await waitFor(() => expect(mockBid).toHaveBeenCalledWith(1, 2.1));
   });
 
   it('pre-fills the input with the minimum next bid on mount', async () => {
@@ -219,9 +255,9 @@ describe('BiddingPanel', () => {
     );
 
     const input = screen.getByPlaceholderText(/min/i) as HTMLInputElement;
-    // Should be pre-filled with 2.0000001 (current + increment).
+    // Should be pre-filled with 2.1 (current + contract increment).
     await waitFor(() => {
-      expect(input.value).toBe('2.0000001');
+      expect(input.value).toBe('2.1');
     });
   });
 });

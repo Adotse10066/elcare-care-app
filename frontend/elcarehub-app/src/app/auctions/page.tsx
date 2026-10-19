@@ -7,11 +7,12 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuctions } from "@/hooks/useAuctions";
 import { Auction, stroopsToXlm } from "@/lib/contract";
 import { fetchMetadata, cidToGatewayUrl, ArtworkMetadata } from "@/lib/ipfs";
 import { AuctionCardSkeleton } from "@/components/Skeletons";
+import { useFilterUrlSync } from "@/hooks/useFilterUrlSync";
 import {
   Gavel,
   Clock,
@@ -159,19 +160,21 @@ function AuctionCard({ auction }: { auction: Auction }) {
 
 export default function AuctionsPage() {
   const { auctions, isLoading, error, refresh } = useAuctions();
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const { syncQueryParam } = useFilterUrlSync();
 
   // Tab state backed by URL: /auctions?status=Active
-  const tabParam = searchParams.get("status") as Tab | null;
-  const [tab, setTab] = useState<Tab>(tabParam ?? "all");
+  const tabParam = searchParams.get("status");
+  const tabFromUrl = TABS.some(({ key }) => key === tabParam);
+  const [tab, setTab] = useState<Tab>(tabFromUrl ? (tabParam as Tab) : "all");
+
+  useEffect(() => {
+    setTab(tabFromUrl ? (tabParam as Tab) : "all");
+  }, [tabFromUrl, tabParam]);
 
   const handleTabChange = (newTab: Tab) => {
     setTab(newTab);
-    const params = new URLSearchParams();
-    if (newTab !== "all") params.set("status", newTab);
-    const qs = params.toString();
-    router.replace(qs ? `/auctions?${qs}` : "/auctions", { scroll: false });
+    syncQueryParam("status", newTab === "all" ? null : newTab);
   };
 
   const [metadataMap, setMetadataMap] = useState<

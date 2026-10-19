@@ -11,6 +11,7 @@ const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function useAdminSession(adminPublicKey?: string | null) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
   const [lastAuthTime, setLastAuthTime] = useState<number | null>(null);
 
   const checkSession = useCallback(() => {
@@ -18,6 +19,7 @@ export function useAdminSession(adminPublicKey?: string | null) {
     const isValid = Date.now() - lastAuthTime < SESSION_TIMEOUT_MS;
     if (!isValid && isAuthenticated) {
       setIsAuthenticated(false);
+      setIsExpired(true);
       emitAuditEvent("session.expired", adminPublicKey ?? null, "initiated");
       clearSessionAuditLog();
     }
@@ -27,12 +29,14 @@ export function useAdminSession(adminPublicKey?: string | null) {
   const authenticate = useCallback(async () => {
     setLastAuthTime(Date.now());
     setIsAuthenticated(true);
+    setIsExpired(false);
     emitAuditEvent("session.start", adminPublicKey ?? null, "success");
     return true;
   }, [adminPublicKey]);
 
   const logout = useCallback(() => {
     setIsAuthenticated(false);
+    setIsExpired(false);
     setLastAuthTime(null);
     emitAuditEvent("session.end", adminPublicKey ?? null, "success");
     clearSessionAuditLog();
@@ -46,6 +50,7 @@ export function useAdminSession(adminPublicKey?: string | null) {
 
   return {
     isAuthenticated,
+    isExpired,
     authenticate,
     logout,
     checkSession,

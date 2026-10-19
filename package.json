@@ -12,6 +12,7 @@
     "validate:abi": "node packages/contract-abi/scripts/validate-abi.mjs",
     "validate:contract-errors": "node scripts/contract-errors/validate-error-coverage.mjs",
     "validate:openapi": "bash scripts/check-openapi.sh",
+    "validate:markdown-links": "node scripts/validate-markdown-links.js",
     "archive": "tsx indexer/src/archive.ts",
     "test:frontend": "npm run test --prefix frontend/elcarehub-app",
     "test:indexer": "npm run test --prefix indexer",
@@ -25,6 +26,9 @@
     "install:all": "npm ci",
     "ttl:keeper": "tsx scripts/ttl-keeper.ts",
     "check-event-schemas": "node scripts/check-event-schemas.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "workspaces": [
     "packages/config",
