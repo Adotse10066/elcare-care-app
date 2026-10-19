@@ -310,11 +310,12 @@ export default function AdminPage() {
         if (!searchResult) return;
 
         const action = searchResult.isRevoked ? "reinstate" : "revoke";
+        const artistIdentifier = `${searchResult.address.slice(0, 8)}...${searchResult.address.slice(-6)}`;
         
         setConfirmConfig({
             isOpen: true,
             title: searchResult.isRevoked ? "Reinstate Artist" : "Revoke Artist",
-            actionDescription: `${searchResult.isRevoked ? "Restoring" : "Removing"} permissions for artist ${searchResult.address}.`,
+            actionDescription: `${searchResult.isRevoked ? "Restoring" : "Removing"} permissions for artist ${artistIdentifier}.`,
             consequences: searchResult.isRevoked 
                 ? ["Artist will be able to create new listings and auctions again.", "Their existing profile will be visible to all users."]
                 : ["Artist will no longer be able to create new listings or auctions.", "This action will be recorded on the blockchain.", "Existing listings may need to be manually managed."],

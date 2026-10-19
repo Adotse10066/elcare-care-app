@@ -9,7 +9,9 @@ import userEvent from "@testing-library/user-event";
 
 const mockDeploy = jest.fn();
 const mockPushToast = jest.fn();
-let mockPublicKey: string | null = "GPUBKEY";
+const validPublicKey = `G${"A".repeat(55)}`;
+let mockPublicKey: string | null = validPublicKey;
+let mockNetwork = "testnet";
 
 jest.mock("@/context/WalletContext", () => ({
   useWalletContext: () => ({ publicKey: mockPublicKey }),
@@ -21,6 +23,8 @@ jest.mock("@/hooks/useLaunchpad", () => ({
     isDeploying: false,
     error: null,
   }),
+  useDeploySalt: () => "test-salt",
+  usePreflightDeploy: () => ({ result: null, isLoading: false }),
 }));
 
 jest.mock("@/hooks/useSupportedTokens", () => ({
@@ -86,7 +90,7 @@ jest.mock("@stellar/stellar-sdk", () => ({
 }));
 
 jest.mock("@/lib/config", () => ({
-  config: { network: "testnet", contractId: "CTEST" },
+  config: { get network() { return mockNetwork; }, contractId: "CTEST" },
 }));
 
 import { CollectionForm } from "@/components/CollectionForm";
@@ -105,7 +109,8 @@ async function advanceToStep(user: ReturnType<typeof userEvent.setup>, stepIndex
 describe("CollectionForm wizard", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPublicKey = "GPUBKEY";
+    mockPublicKey = validPublicKey;
+    mockNetwork = "testnet";
   });
 
   // ── Step 0: Kind Selection ─────────────────────────────────────────────────
@@ -273,6 +278,7 @@ describe("CollectionForm wizard", () => {
     });
 
     it("shows success state with deployed address after successful deploy", async () => {
+      mockNetwork = "mainnet";
       mockDeploy.mockResolvedValueOnce("CDEPLOYED_ADDRESS_123");
       const user = userEvent.setup();
       await goToStep3(user);
@@ -281,6 +287,9 @@ describe("CollectionForm wizard", () => {
         expect(screen.getByText(/collection deployed/i)).toBeInTheDocument()
       );
       expect(screen.getByText("CDEPLOYED_ADDRESS_123")).toBeInTheDocument();
+      expect(
+        screen.getByText(`Your collection is live on Stellar ${mockNetwork}.`)
+      ).toBeInTheDocument();
     });
 
     it("fires a success toast after successful deploy", async () => {

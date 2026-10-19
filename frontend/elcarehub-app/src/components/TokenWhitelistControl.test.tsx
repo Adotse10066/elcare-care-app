@@ -11,6 +11,7 @@ describe("TokenWhitelistControl", () => {
     marketplaceContractId: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
     network: "testnet" as const,
   };
+  const validAddress = `C${"A".repeat(55)}`;
 
   it("renders form with action selection", () => {
     render(<TokenWhitelistControl {...defaultProps} />);
@@ -32,41 +33,81 @@ describe("TokenWhitelistControl", () => {
     fireEvent.change(symbolInput, { target: { value: "USDC" } });
 
     await waitFor(() => {
-      expect(screen.getByText(/Invalid address format/)).toBeInTheDocument();
+      expect(screen.getByText(/Invalid Stellar contract address/)).toBeInTheDocument();
     });
 
     // Valid address
     fireEvent.change(addressInput, {
-      target: {
-        value: "CUSDC7YNEZKVQXT5U5XCJZKTQcd4V3CX6AIUJJGPXEUEA2JREOFCQN7",
-      },
+      target: { value: validAddress },
     });
 
     await waitFor(() => {
-      expect(screen.queryByText(/Invalid address format/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Invalid Stellar contract address/)
+      ).not.toBeInTheDocument();
     });
   });
 
-  it("requires all verification checklist items before submit", async () => {
+  it("explains incomplete verification and blocks submission", async () => {
     render(<TokenWhitelistControl {...defaultProps} />);
 
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        /CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/
+      ),
+      {
+        target: { value: validAddress },
+      }
+    );
+    fireEvent.change(screen.getByPlaceholderText("USDC"), {
+      target: { value: "USDC" },
+    });
     const submitButton = screen.getByRole("button", {
       name: /Add Token/,
     });
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock;
 
-    // Initially disabled
-    expect(submitButton).toBeDisabled();
+    fireEvent.click(submitButton);
 
-    // Check all items
+    expect(
+      await screen.findByText("Complete all four verification checks before submitting.")
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // All checks must be complete before the submit handler proceeds.
     const checkboxes = screen.getAllByRole("checkbox");
     checkboxes.forEach((checkbox) => {
       fireEvent.click(checkbox);
     });
+    expect(submitButton).not.toBeDisabled();
+  });
 
-    // Now enabled
-    await waitFor(() => {
-      expect(submitButton).not.toBeDisabled();
+  it("explains an invalid address and blocks the API request", async () => {
+    render(<TokenWhitelistControl {...defaultProps} />);
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock;
+
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        /CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/
+      ),
+      { target: { value: "INVALID" } }
+    );
+    fireEvent.change(screen.getByPlaceholderText("USDC"), {
+      target: { value: "USDC" },
     });
+    screen.getAllByRole("checkbox").forEach((checkbox) => {
+      fireEvent.click(checkbox);
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Add Token/ }));
+
+    expect(
+      await screen.findByText(
+        "Token contract address must be a valid Stellar address (C + 55 chars)."
+      )
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("warns on non-standard decimals", async () => {
@@ -98,9 +139,7 @@ describe("TokenWhitelistControl", () => {
     const symbolInput = screen.getByPlaceholderText("USDC");
 
     fireEvent.change(addressInput, {
-      target: {
-        value: "CUSDC7YNEZKVQXT5U5XCJZKTQCD4V3CX6AIUJJGPXEUEA2JREOFCQN7",
-      },
+      target: { value: validAddress },
     });
     fireEvent.change(symbolInput, { target: { value: "USDC" } });
 
@@ -127,7 +166,7 @@ describe("TokenWhitelistControl", () => {
 
     await waitFor(() => {
       expect(onTokenAdded).toHaveBeenCalledWith(
-        "CUSDC7YNEZKVQXT5U5XCJZKTQCD4V3CX6AIUJJGPXEUEA2JREOFCQN7"
+        validAddress
       );
     });
   });
@@ -142,9 +181,7 @@ describe("TokenWhitelistControl", () => {
     const symbolInput = screen.getByPlaceholderText("USDC");
 
     fireEvent.change(addressInput, {
-      target: {
-        value: "CUSDC7YNEZKVQXT5U5XCJZKTQCD4V3CX6AIUJJGPXEUEA2JREOFCQN7",
-      },
+      target: { value: validAddress },
     });
     fireEvent.change(symbolInput, { target: { value: "USDC" } });
 
