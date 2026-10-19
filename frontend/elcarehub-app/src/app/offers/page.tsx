@@ -14,7 +14,7 @@ import { WalletGuard } from "@/components/WalletGuard";
 import { ResourceState } from "@/components/PageStates";
 import { categorizePageError } from "@/lib/pageState";
 import { SUPPORTED_TOKENS } from "@/config/tokens";
-import { OfferStatusBadge } from "@/components/OfferStatusBadge";
+import { OfferStatusBadge, getOfferStatusExplanation } from "@/components/OfferStatusBadge";
 import { clsx } from "clsx";
 
 type Tab = "all" | "Pending" | "Expired" | "Accepted" | "Rejected" | "Withdrawn";
@@ -456,7 +456,22 @@ export default function OffersPage() {
                             </>
                           )}
                         </button>
-                      ) : null}
+                      ) : (
+                        /* Non-withdrawable terminal state: explain why no action is available.
+                           This text is derived from the existing contract state and does NOT
+                           imply any off-chain action can override it (issue #891). */
+                        (() => {
+                          const explanation = getOfferStatusExplanation(uiStatus);
+                          return explanation ? (
+                            <p
+                              data-testid={`offer-status-reason-${o.offer_id}`}
+                              className="w-full rounded-2xl bg-white/[0.03] border border-white/5 px-4 py-3 text-xs text-white/40 text-center"
+                            >
+                              {explanation}
+                            </p>
+                          ) : null;
+                        })()
+                      )}
                     </div>
                   </div>
                   );
