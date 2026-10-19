@@ -21,7 +21,7 @@ export default function MyCollectionsPage() {
 
   if (!isConnected) {
     return (
-      <main className="min-h-screen bg-brand-50/20">
+      <div className="min-h-screen bg-brand-50/20">
         <Navbar />
 
         <div className="pt-24 pb-12">
@@ -42,12 +42,12 @@ export default function MyCollectionsPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-brand-50/20">
+    <div className="min-h-screen bg-brand-50/20">
       <Navbar />
 
       <div className="pt-24 pb-12">
@@ -242,6 +242,6 @@ export default function MyCollectionsPage() {
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

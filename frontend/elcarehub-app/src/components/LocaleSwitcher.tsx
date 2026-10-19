@@ -11,9 +11,9 @@
 import { useLocale } from '@/hooks/useLocale';
 import { type Locale, SUPPORTED_LOCALES } from '@/lib/i18n';
 
-const LOCALE_META: Record<Locale, { flag: string; label: string }> = {
-  en: { flag: '🇬🇧', label: 'EN' },
-  sw: { flag: '🇰🇪', label: 'SW' },
+const LOCALE_META: Record<Locale, { flag: string; label: string; language: string }> = {
+  en: { flag: '🇬🇧', label: 'EN', language: 'English' },
+  sw: { flag: '🇰🇪', label: 'SW', language: 'Kiswahili' },
 };
 
 export function LocaleSwitcher() {
@@ -22,11 +22,11 @@ export function LocaleSwitcher() {
   return (
     <div
       role="radiogroup"
-      aria-label="Language selector"
+      aria-label={`Language selector, current language: ${LOCALE_META[locale].language}`}
       className="flex items-center gap-0.5 rounded-lg bg-white/5 border border-white/10 p-0.5"
     >
       {SUPPORTED_LOCALES.map((loc) => {
-        const { flag, label } = LOCALE_META[loc];
+        const { flag, label, language } = LOCALE_META[loc];
         const isActive = locale === loc;
 
         return (
@@ -34,7 +34,7 @@ export function LocaleSwitcher() {
             key={loc}
             role="radio"
             aria-checked={isActive}
-            aria-label={`Switch language to ${label}`}
+            aria-label={language}
             onClick={() => setLocale(loc)}
             data-testid={`locale-${loc}`}
             className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition-all duration-200 ${

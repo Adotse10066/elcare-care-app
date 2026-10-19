@@ -32,6 +32,7 @@ describe('LocaleSwitcher', () => {
     fireEvent.click(swButton);
     expect(swButton).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('locale-en')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radiogroup', { name: /current language: kiswahili/i })).toBeInTheDocument();
   });
 
   it('switches back to English after clicking EN', () => {
@@ -52,13 +53,13 @@ describe('LocaleSwitcher', () => {
 
   it('renders the radio group with an accessible label', () => {
     render(<LocaleSwitcher />);
-    const group = screen.getByRole('radiogroup', { name: /language selector/i });
+    const group = screen.getByRole('radiogroup', { name: /language selector, current language: english/i });
     expect(group).toBeInTheDocument();
   });
 
-  it('has aria-labels on each locale button', () => {
+  it('names each language and exposes the selected locale semantically', () => {
     render(<LocaleSwitcher />);
-    expect(screen.getByRole('radio', { name: /switch language to en/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /switch language to sw/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Kiswahili' })).toHaveAttribute('aria-checked', 'false');
   });
 });
