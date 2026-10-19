@@ -21,7 +21,7 @@ export default function CollectionsDirectoryPage() {
   });
 
   return (
-    <main className="min-h-screen bg-brand-50/20">
+    <div className="min-h-screen bg-brand-50/20">
       <Navbar />
 
       <div className="pt-24 pb-12">
@@ -145,6 +145,6 @@ export default function CollectionsDirectoryPage() {
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }
