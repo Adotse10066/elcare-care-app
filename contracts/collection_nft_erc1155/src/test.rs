@@ -1352,6 +1352,44 @@ fn batch_transfer_zero_amount_fails() {
     assert_eq!(result, Err(Ok(Error::ZeroAmount)));
 }
 
+// ─── Zero-quantity transfer boundary (#task-3) ────────────────────────────────
+//
+// `transfer` does not have an explicit zero-amount guard (unlike `batch_transfer`
+// which rejects zero with `ZeroAmount`).  A zero-quantity `transfer` is a
+// valid no-op: balances and total supply are unchanged and no InsufficientBalance
+// error is raised because `from_bal (0) < 0` is false.
+// This test pins that behavior so any future guard addition is a conscious change.
+
+#[test]
+fn transfer_zero_amount_is_a_noop() {
+    let (env, c, _, _) = setup();
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    // Mint some tokens for alice so the from-balance check can't interfere.
+    let id = c.mint_new(&alice, &10u128, &String::from_str(&env, "ipfs://Qm0"));
+    // Transfer zero — should succeed as a no-op.
+    c.transfer(&alice, &bob, &id, &0u128);
+    // Neither balance nor supply should have changed.
+    assert_eq!(c.balance_of(&alice, &id), 10u128);
+    assert_eq!(c.balance_of(&bob, &id), 0u128);
+    assert_eq!(c.total_supply(&id), 10u128);
+}
+
+// ─── Empty URI boundary (#task-4) ────────────────────────────────────────────
+//
+// `set_base_uri` calls the internal `validate_uri` helper which rejects an
+// empty string with `Error::EmptyUri`.  This test pins that boundary so any
+// weakening of the check is caught immediately.
+
+#[test]
+fn set_base_uri_empty_string_returns_empty_uri_error() {
+    let (env, c, _, _) = setup();
+    let result = c.try_set_base_uri(&String::from_str(&env, ""));
+    assert_eq!(result, Err(Ok(Error::EmptyUri)));
+    // Confirm no URI was stored.
+    assert_eq!(c.base_uri(), None);
+}
+
 
 // ════════════════════════════════════════════════════════════
 // Issue #851 — Metadata Validation Tests (NormalNFT1155)

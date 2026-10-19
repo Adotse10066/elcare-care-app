@@ -83,6 +83,10 @@ pub enum Error {
     NotPendingCreator = 25,
     /// accept_creator() called after the pending proposal's expiry ledger (#484).
     ProposalExpired = 26,
+    /// max_supply is 0 or exceeds MAX_SUPPLY_LIMIT.
+    InvalidMaxSupply = 27,
+    /// URI uses a disallowed scheme (e.g. "data:").
+    InvalidUri = 28,
 }
 
 // ─── Storage Keys ─────────────────────────────────────────────────────────────
@@ -195,7 +199,7 @@ impl NormalNFT1155 {
         }
         // Issue #476: apply shared metadata validation rules.
         metadata::validate_name(&name, Error::EmptyName, Error::NameTooLong)?;
-        metadata::validate_royalty_bps(royalty_bps, Error::InvalidBps)?;
+        metadata::validate_royalty_bps_with_err(royalty_bps, Error::InvalidBps)?;
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Creator, &creator);
         // OriginalCreator is set once at initialization and never overwritten
