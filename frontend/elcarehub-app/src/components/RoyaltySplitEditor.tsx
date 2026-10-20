@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Copy } from "lucide-react";
 import { isValidStellarAddress } from "@/lib/validation";
 import { bpsToPercent, formatBps, percentToBps } from "@/lib/amount";
@@ -123,6 +123,11 @@ export function RoyaltySplitEditor({
   forceShowErrors = false,
 }: RoyaltySplitEditorProps) {
   const [touched, setTouched] = useState<Set<string>>(new Set());
+  const rowIdPrefix = useId();
+  const nextRowId = useRef(recipients.length);
+  const [rowIds, setRowIds] = useState(() =>
+    recipients.map((_, index) => `${rowIdPrefix}-recipient-${index}`)
+  );
 
   const validation = useMemo(
     () => validateRecipients(recipients, maxRecipients),
@@ -141,17 +146,20 @@ export function RoyaltySplitEditor({
 
   function addRecipient() {
     if (recipients.length >= maxRecipients) return;
+    const rowId = `${rowIdPrefix}-recipient-${nextRowId.current++}`;
+    setRowIds((current) => [...current, rowId]);
     onChange([...recipients, { address: "", percentage: 0 }]);
   }
 
   function removeRecipient(index: number) {
     if (recipients.length <= 1) return;
+    setRowIds((current) => current.filter((_, i) => i !== index));
     onChange(recipients.filter((_, i) => i !== index));
   }
 
   function updateRecipient(index: number, field: "address" | "percentage", value: string | number) {
     onChange(recipients.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
-    markTouched(`${field}_${index}`);
+    markTouched(`${rowIds[index]}_${field}`);
   }
 
   function useCollectionDefault() {
@@ -203,19 +211,25 @@ export function RoyaltySplitEditor({
 
       <div className="space-y-3">
         {recipients.map((recipient, idx) => {
+          const rowId = rowIds[idx];
           const rowErrors = validation.rows[idx];
-          const addressTouched = shouldShow(`address_${idx}`);
-          const pctTouched = shouldShow(`percentage_${idx}`);
+          const addressTouched = shouldShow(`${rowId}_address`);
+          const pctTouched = shouldShow(`${rowId}_percentage`);
+          const addressId = `${rowId}-address`;
+          const percentageId = `${rowId}-percentage`;
           return (
-            <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start">
+            <div key={rowId} className="flex flex-col sm:flex-row gap-3 items-start">
               <div className="w-full sm:flex-1 space-y-1">
+                <label htmlFor={addressId} className="sr-only">
+                  Recipient {idx + 1} address
+                </label>
                 <input
+                  id={addressId}
                   value={recipient.address}
                   onChange={(e) => updateRecipient(idx, "address", e.target.value)}
-                  onBlur={() => markTouched(`address_${idx}`)}
+                  onBlur={() => markTouched(`${rowId}_address`)}
                   disabled={disabled}
                   placeholder="Stellar address (G...)"
-                  aria-label={`Recipient ${idx + 1} address`}
                   aria-invalid={addressTouched && !!rowErrors?.address}
                   className={`w-full rounded-2xl border px-4 py-3 text-sm focus:outline-none transition-all font-inter ${
                     addressTouched && rowErrors?.address
@@ -231,7 +245,11 @@ export function RoyaltySplitEditor({
               </div>
               <div className="w-full sm:w-28 space-y-1">
                 <div className="relative">
+                  <label htmlFor={percentageId} className="sr-only">
+                    Recipient {idx + 1} percentage
+                  </label>
                   <input
+                    id={percentageId}
                     type="number"
                     min={1}
                     max={100}
@@ -240,9 +258,8 @@ export function RoyaltySplitEditor({
                     onChange={(e) =>
                       updateRecipient(idx, "percentage", parseFloat(e.target.value) || 0)
                     }
-                    onBlur={() => markTouched(`percentage_${idx}`)}
+                    onBlur={() => markTouched(`${rowId}_percentage`)}
                     disabled={disabled}
-                    aria-label={`Recipient ${idx + 1} percentage`}
                     aria-invalid={pctTouched && !!rowErrors?.percentage}
                     className={`w-full rounded-2xl border px-4 py-3 pr-8 text-sm focus:outline-none transition-all font-inter ${
                       pctTouched && rowErrors?.percentage

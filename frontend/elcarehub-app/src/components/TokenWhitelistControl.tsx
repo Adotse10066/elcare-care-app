@@ -64,7 +64,7 @@ export const TokenWhitelistControl: React.FC<TokenWhitelistControlProps> = ({
 
     // Validation
     if (!validateAddress(action.tokenAddress)) {
-      setError("Invalid Stellar contract address (C + 55 chars)");
+      setError("Token contract address must be a valid Stellar address (C + 55 chars).");
       return;
     }
 
@@ -74,7 +74,7 @@ export const TokenWhitelistControl: React.FC<TokenWhitelistControlProps> = ({
     }
 
     if (!checklistComplete()) {
-      setError("All verification items must be checked before proceeding");
+      setError("Complete all four verification checks before submitting.");
       return;
     }
 
@@ -189,7 +189,7 @@ export const TokenWhitelistControl: React.FC<TokenWhitelistControlProps> = ({
             />
             {action.tokenAddress &&
               !validateAddress(action.tokenAddress) && (
-                <span className="error">Invalid address format</span>
+                <span className="error">Invalid Stellar contract address.</span>
               )}
           </label>
 
@@ -313,7 +313,7 @@ export const TokenWhitelistControl: React.FC<TokenWhitelistControlProps> = ({
         {/* Submit */}
         <button
           type="submit"
-          disabled={loading || !checklistComplete()}
+          disabled={loading}
           className="submit-button"
         >
           {loading ? "Processing…" : `${action.type === "add" ? "Add" : "Remove"} Token`}

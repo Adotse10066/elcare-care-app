@@ -278,7 +278,7 @@ export function CollectionForm() {
               Collection Deployed!
             </h3>
             <p className="text-gray-500 font-inter mt-1">
-              Your collection is live on the Stellar network.
+              Your collection is live on Stellar {config.network}.
             </p>
           </div>
           <div className="w-full p-4 bg-gray-50 rounded-2xl break-all font-mono text-sm text-gray-600 border border-gray-100">
@@ -293,7 +293,6 @@ export function CollectionForm() {
             <ExternalLink size={12} /> View on Stellar Explorer
           </a>
         </div>
-
         {/* Post-deployment checklist */}
         <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-5">
           <h4 className="text-sm font-bold text-brand-700 uppercase tracking-wider mb-3">

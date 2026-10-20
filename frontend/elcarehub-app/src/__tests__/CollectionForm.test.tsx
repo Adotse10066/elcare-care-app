@@ -95,7 +95,7 @@ jest.mock("@stellar/stellar-sdk", () => ({
 }));
 
 jest.mock("@/lib/config", () => ({
-  config: { network: "testnet", contractId: "CTEST" },
+  config: { get network() { return mockNetwork; }, contractId: "CTEST" },
 }));
 
 import { CollectionForm } from "@/components/CollectionForm";
@@ -325,6 +325,7 @@ describe("CollectionForm wizard", () => {
     });
 
     it("shows success state with deployed address after successful deploy", async () => {
+      mockNetwork = "mainnet";
       mockDeploy.mockResolvedValueOnce("CDEPLOYED_ADDRESS_123");
       const user = userEvent.setup();
       await goToStep3(user);
@@ -333,6 +334,9 @@ describe("CollectionForm wizard", () => {
         expect(screen.getByText(/collection deployed/i)).toBeInTheDocument()
       );
       expect(screen.getByText("CDEPLOYED_ADDRESS_123")).toBeInTheDocument();
+      expect(
+        screen.getByText(`Your collection is live on Stellar ${mockNetwork}.`)
+      ).toBeInTheDocument();
     });
 
     it("fires a success toast after successful deploy", async () => {

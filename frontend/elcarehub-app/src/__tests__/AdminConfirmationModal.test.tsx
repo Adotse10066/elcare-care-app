@@ -41,6 +41,28 @@ describe("AdminConfirmationModal", () => {
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("identifies the artist and does not confirm when canceled", () => {
+    const artistIdentifier = "GABCDEF1...WXYZ89";
+    const onClose = jest.fn();
+    const onConfirm = jest.fn();
+    render(
+      <AdminConfirmationModal
+        {...defaultProps}
+        onClose={onClose}
+        onConfirm={onConfirm}
+        title="Revoke Artist"
+        actionDescription={`Removing permissions for artist ${artistIdentifier}.`}
+      />
+    );
+
+    expect(
+      screen.getByText(`Removing permissions for artist ${artistIdentifier}.`)
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it("should show loading state when isProcessing is true", () => {
     render(<AdminConfirmationModal {...defaultProps} isProcessing={true} />);
     expect(screen.getByText("Processing...")).toBeInTheDocument();
